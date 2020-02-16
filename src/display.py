@@ -2,16 +2,16 @@ import pygame as py
 import sys
 from pianoroll import *
 from pypianoroll import *
-import numpy as np
 from jarvis import *
-
-# import tensorflow
+from instrument_panel import *
 import time
+from add_instruments_panel import *
+
+
 class Display:
 
     def __init__(self, file, mes):
         py.display.init()
-
         self.width = 1000
         self.height = 800
         self.win = py.display.set_mode((self.width, self.height))
@@ -20,11 +20,14 @@ class Display:
         self.pianoroll = Pianoroll(self.measure_limit)
         self.roll_index = 0
         self.j = 10
-        self.controls = {"right_click": False, "play": False, "move_piano_roll_left": False,
-                         "move_piano_roll_right": False, "playing": False,"show_map":False}
+        self.controls = {"right_click": False, "play": False, "move_piano_roll_left": False,"update_ipanel":True,
+                         "move_piano_roll_right": False, "playing": False, "show_map": False}
         self.events = {"update_pianoroll": True}
         self.event_handled = True
         self.quit = False
+        # window is for creating temproary panels for selecting instruments and files
+        self.window = None
+        self.instrument_panel = InstrumentPanel()
 
         self.openfile = False
         if file == "":
@@ -41,6 +44,7 @@ class Display:
             except Exception:
                 print("No file in that name")
                 pass
+
         print(self.file)
         py.mixer.init()
         self.button_play = py.image.load("/Users/nantha/Projc/my_projects/FastMusic/images/play.png")
@@ -52,13 +56,23 @@ class Display:
         self.symbol_measure = py.image.load("/Users/nantha/Projc/my_projects/FastMusic/images/measure.png")
 
     def draw(self):
-
-        self.win.blit(self.pianoroll.pianoroll, (180, 100))
-        self.draw_controls()
         # For minimizing the frequency of the pianoroll surface updates
+
         if self.events["update_pianoroll"] or self.pianoroll.controls["bar_move_velocity"] != 0:
+            self.win.fill((30, 30, 40))
             self.pianoroll.update()
             self.events["update_pianoroll"] = False
+            self.win.blit(self.pianoroll.pianoroll, (180, 100))
+            self.draw_controls()
+            self.win.blit(self.instrument_panel.surface_panel, (10, 100))
+            if self.window != None:
+                self.window.draw()
+                self.window.rect.topleft = (100, 100)
+                self.win.blit(self.window.surface_panel, self.window.rect)
+            py.display.update()
+        if self.controls["update_ipanel"]:
+            self.controls["update_ipanel"] =False
+            self.instrument_panel.draw()
 
     def draw_controls(self):
         self.button_note = py.image.load("/Users/nantha/Projc/my_projects/FastMusic/images/" + str(
@@ -77,12 +91,24 @@ class Display:
         if self.controls["move_piano_roll_left"] or self.controls["move_piano_roll_right"]:
             self.pianoroll.controls["make_velocity_0"] = False
             if self.controls["move_piano_roll_left"]:
-                if self.pianoroll.controls["bar_move_velocity"] > -10.0:
-                    self.pianoroll.controls["bar_move_velocity"] -= 0.2
+                if self.pianoroll.controls["fast_move_piano_roll"]:
+                    if self.pianoroll.controls["bar_move_velocity"] > -30.0:
+                        self.pianoroll.controls["bar_move_velocity"] -= 1.0
+                else:
+                    if self.pianoroll.controls["bar_move_velocity"] > -10.0:
+                        self.pianoroll.controls["bar_move_velocity"] -= 0.2
+                    else:
+                        self.pianoroll.controls["bar_move_velocity"] += 1.0
 
             if self.controls["move_piano_roll_right"]:
-                if self.pianoroll.controls["bar_move_velocity"] < 10.0:
-                    self.pianoroll.controls["bar_move_velocity"] += 0.2
+                if self.pianoroll.controls["fast_move_piano_roll"]:
+                    if self.pianoroll.controls["bar_move_velocity"] < 30.0:
+                        self.pianoroll.controls["bar_move_velocity"] += 1.0
+                else:
+                    if self.pianoroll.controls["bar_move_velocity"] < 10.0:
+                        self.pianoroll.controls["bar_move_velocity"] += 0.2
+                    else:
+                        self.pianoroll.controls["bar_move_velocity"] -= 1.0
             # print("B",self.pianoroll.controls["bar_move_velocity"])
         else:
             self.pianoroll.controls["make_velocity_0"] = True
@@ -133,17 +159,40 @@ class Display:
                         pass
 
                 if event.key == py.K_c:
-                    self.pianoroll.notes = self.pianoroll.notes*0
-                    self.pianoroll.notes = self.pianoroll.notes-1
+                    self.pianoroll.notes = self.pianoroll.notes * 0
+                    self.pianoroll.notes = self.pianoroll.notes - 1
                     self.pianoroll.notes_index = []
                     self.events["update_pianoroll"] = True
                     print("Cleared")
 
                 if event.key == py.K_g:
-                    np.save("temp.npy",self.pianoroll.notes)
+                    np.save("temp.npy", self.pianoroll.notes)
                     print("Saved Temp")
-                    jarv = Melody("newmodel1.h5")
+                    jarv = Melody("deep_flight_model.h5")
+                    print(jarv.model.summary())
+                    jarv.input_length = 32
+                    # jarv.use_model()
+                    jarv.generate_tune()
+
+                if event.key == py.K_f:
+                    np.save("temp.npy", self.pianoroll.notes)
+                    print("Saved Temp")
+                    jarv = Melody("newmodel.h5")
+                    print(jarv.model.summary())
+                    jarv.input_length = 128
                     jarv.use_model()
+
+                if event.key == py.K_e:
+                    """Uses only the notes that is present in the 
+                    pianoroll.notes_index"""
+                    jarv = Melody("256model.h5")
+                    use_notes = list()
+                    for note_index in self.pianoroll.notes_index:
+                        print(note_index, note_index[0] * 6 + self.pianoroll.notes[note_index[0]][note_index[1]])
+                        use_notes.append(note_index[0] * 6 + self.pianoroll.notes[note_index[0]][note_index[1]])
+                    jarv.input_length = 128
+                    jarv.input_data_to_model(self.pianoroll.notes)
+                    jarv.random_noise()
 
                 if event.key == py.K_m:
                     self.controls["show_map"] = not self.controls["show_map"]
@@ -155,24 +204,25 @@ class Display:
 
                 if event.key == py.K_r:
                     for i in range(self.pianoroll.notes.shape[1]):
-                        ter = self.pianoroll.notes[:,i]
+                        ter = self.pianoroll.notes[:, i]
                         for j in range(len(ter)):
-                            if ter[j]!=-1:
-                                ter[j+1:] = -1
+                            if ter[j] != -1:
+                                ter[j + 1:] = -1
                     self.events["update_pianoroll"] = True
 
                 if event.key == py.K_q:
-                    np.save('train_data.npy',self.pianoroll.notes)
+                    np.save('train_data.npy', self.pianoroll.notes)
                     print("Saved Successfully")
 
                 if event.key == py.K_s:
-                    np.save("saved_advance/"+str(int(time.time())),self.pianoroll.notes)
+                    np.save("saved_advance/" + str(int(time.time())), self.pianoroll.notes)
                     print("Saved successfully")
 
                 if event.key == py.K_UP:
                     if self.pianoroll.controls["h_zoom"] >= 1:
                         self.pianoroll.controls["h_zoom"] += 1
                         self.events["update_pianoroll"] = True
+                        print(self.pianoroll.controls["h_zoom"])
 
                     else:
                         self.pianoroll.controls["h_zoom"] *= 2
@@ -185,7 +235,7 @@ class Display:
                         self.pianoroll.controls["h_zoom"] -= 1
                         self.events["update_pianoroll"] = True
 
-                    elif (self.pianoroll.controls["h_zoom"] > 0.25):
+                    elif self.pianoroll.controls["h_zoom"] > 0.25:
                         self.pianoroll.controls["h_zoom"] /= 2
                         self.events["update_pianoroll"] = True
                     # print(self.pianoroll.controls["h_zoom"])
@@ -199,10 +249,15 @@ class Display:
                     self.controls["move_piano_roll_right"] = True
                     pass
 
+                if event.key == py.K_RSHIFT:
+                    print("shift pressed")
+                    self.pianoroll.controls["fast_move_piano_roll"] = True
+
                 if event.key == py.K_SPACE:
                     self.controls["play"] = not self.controls["play"]
 
             if event.type == py.KEYUP:
+                self.events["update_pianoroll"] = True
                 if event.key == py.K_LEFT:
                     self.controls["move_piano_roll_left"] = False
                     pass
@@ -210,6 +265,10 @@ class Display:
                 if event.key == py.K_RIGHT:
                     self.controls["move_piano_roll_right"] = False
                     pass
+
+                if event.key == py.K_RSHIFT:
+                    self.pianoroll.controls["fast_move_piano_roll"] = False
+
             if event.type == py.USEREVENT:
                 self.controls["play"] = False
                 self.controls["playing"] = False
@@ -219,8 +278,16 @@ class Display:
                 self.event_handled = True
                 self.events["update_pianoroll"] = True
                 x, y = py.mouse.get_pos()
-                # print(x, y)
+                #print(x, y)
                 # On cliking the play button
+                if self.window != None:
+                    if x > 100 and x < 100+self.window.width and y > 100 and y <100 + self.window.height:
+                        self.window.handle_events((x-100,y-100))
+
+                if x > 10 and x < 175 and y > 100 and y < 600:
+                    self.instrument_panel.handle_events((x - 10, y - 100))
+
+
                 if x > 500 and x < 532 and y > 30 and y < 62:
                     self.controls["play"] = not self.controls["play"]
 
@@ -246,15 +313,15 @@ class Display:
                     self.controls["right_click"] = False
                     # print(self.pianoroll.notes)
 
-    def load_from_npy(self,file):
+    def load_from_npy(self, file):
         array = np.load(file)
         self.pianoroll.notes = array
         self.pianoroll.notes_index = []
         for i in range(self.pianoroll.notes.shape[1]):
-            row = self.pianoroll.notes[:,i]
+            row = self.pianoroll.notes[:, i]
             for v in range(len(row)):
                 if row[v] != -1:
-                    self.pianoroll.notes_index.append([v,i])
+                    self.pianoroll.notes_index.append([v, i])
                     break
 
     def play(self):
@@ -264,10 +331,6 @@ class Display:
             py.mixer.music.set_endevent(py.USEREVENT)
             self.controls["playing"] = True
             py.mixer.music.play()
-            # for i in self.pianoroll.notes:
-            #    print(i)
-            # print(np.nonzero(self.pianoroll.notes))
-            # print(self.pianoroll.notes[np.nonzero(self.pianoroll.notes)])
 
             print("index", self.pianoroll.notes_index)
         elif self.controls["play"] == False:
@@ -352,26 +415,41 @@ class Display:
             modified_track.append([n, ranges])
         return modified_track
 
+    def request_handler(self):
+        """Checks the requests in other classes request queues"""
+        #print(self.instrument_panel.requests, self.window)
+        if len(self.instrument_panel.requests) > 0:
+            req = self.instrument_panel.requests.pop(0)
+            if req == "instruments":
+                if self.window == None:
+                    self.window = AddInstrumentPanel()
+                #print("Window:", self.window)
+
+
+
+        if self.window != None:
+            if len(self.window.requests) > 0:
+                req = self.window.requests.pop(0)
+                if req == "close":
+                    #Get the value returned from the window
+                    self.instrument_panel.add_instrument(self.window.result)
+                    self.controls["update_ipanel"] = True
+                    self.window = None
+
     def run(self):
-        while (not self.quit):
-            self.win.fill((30, 30, 40))
+        while not self.quit:
             self.draw()
             self.event_handler()
             self.play()
-            py.display.update()
+            self.request_handler()
+
         # print(self.pianoroll.notes)
 
+
 if __name__ == '__main__':
-    file = ""
+    file = "data/again.mid"
     if len(sys.argv) == 2:
         file = sys.argv[1]
 
-    # file = "data/bigil.mid"
-    # file = "data/think.mid"
-    # file ="test.mid"
-    # print("File",file)
-    #file = "data/interstellarZ.mid"
-    #file = "fortest.mid"
-    file = "data/tobeopened.mid"
     d = Display(file, 80)
     d.run()
