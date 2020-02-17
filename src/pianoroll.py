@@ -33,6 +33,7 @@ class Pianoroll:
             self.controls["bar_move_velocity"] = 0
 
     def in1d_alternative_2D(self, nparr, arr):
+
         idx = np.searchsorted(arr, nparr.ravel())
         idx[idx == len(arr)] = 0
         return arr[idx].reshape(nparr.shape) == nparr
@@ -54,6 +55,7 @@ class Pianoroll:
             note_track += 1
             # note_track[self.in1d_alternative_2D(note_track, np.array([-1]))]=0
             notes_pos = np.nonzero(note_track)
+
             # print("Notepos",note_track)
             # print("No",)
             f = 3
@@ -285,3 +287,6 @@ class Pianoroll:
         # for note in self.notes_index:
         # print("N",note,self.notes[note[0]][note[1]])
         # pass
+
+
+

@@ -247,7 +247,7 @@ class Display:
                 if event.key == py.K_RIGHT:
                     self.events["update_pianoroll"] = True
                     self.controls["move_piano_roll_right"] = True
-                    pass
+
 
                 if event.key == py.K_RSHIFT:
                     print("shift pressed")
@@ -260,11 +260,11 @@ class Display:
                 self.events["update_pianoroll"] = True
                 if event.key == py.K_LEFT:
                     self.controls["move_piano_roll_left"] = False
-                    pass
+
 
                 if event.key == py.K_RIGHT:
                     self.controls["move_piano_roll_right"] = False
-                    pass
+
 
                 if event.key == py.K_RSHIFT:
                     self.pianoroll.controls["fast_move_piano_roll"] = False
