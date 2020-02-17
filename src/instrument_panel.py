@@ -40,7 +40,8 @@ class InstrumentPanel:
     def add_instrument(self, programno):
         all_instruments = self.read_instrumentslist()
         programname = all_instruments[programno]
-        print("Read from all_instruments",programname)
+        print("Read from all_instruments", programname)
+
         self.instruments_used.append(programno)
         self.instruments_sprites.append(Instrument(programno,
                                                    len(self.instruments_used) - 1,
@@ -83,13 +84,18 @@ class InstrumentPanel:
         instrument panel surface"""
         x, y = pos
         print(x, y)
+
+        # checks if any instrument is clicked
+        for sprite in self.instruments_sprites:
+            if sprite.rect.collidepoint((x, y)):
+                self.requests.append({"clicked": sprite.index})
+
         # add box
         if x > 8 and x < 8 + 16 and y > 8 and y < 8 + 16:
             self.requests.append("instruments")
             self.seekresponse = True
             pass
         elif x > 32 and x < 32 + 16 and y > 8 and y < 8 + 16:
-
             pass
         # delete box
         print("Handled by Instrument panel")
@@ -98,6 +104,8 @@ class InstrumentPanel:
         if 'program' in response.keys():
             programno = response['program']
             self.add_instrument(programno)
+            if len(self.responses) == 0:
+                self.seekresponse = False
             pass
 
     def update(self):
@@ -107,4 +115,3 @@ class InstrumentPanel:
                     self.__handle_response(response)
                     pass
         self.draw()
-        pass
