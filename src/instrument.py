@@ -14,8 +14,8 @@ class Instrument(py.sprite.Sprite):
         self.namefont = Font(13)
         self.predraw()
 
-    def predraw(self):
-        self.image.fill((30,0,40))
+    def predraw(self,background=(30,0,40)):
+        self.image.fill(background)
         py.draw.line(self.image, (255, 255, 255), (0, 0), (0, 40),3)  # down
         py.draw.line(self.image, (255, 255, 255), (0, 40), (140, 40),3)  # down
         py.draw.line(self.image, (255, 255, 255), (140, 40), (140, 0),3)  # down

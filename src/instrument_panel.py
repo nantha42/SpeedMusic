@@ -13,7 +13,7 @@ class InstrumentPanel:
         self.height = 500
         py.font.init()
         self.surface_panel = py.Surface((self.width, self.height))
-        self.state = {"isopen": False}
+        self.state = {"isopen": False,"delete":False}
         self.instruments_used = [0]
         self.instruments_sprites = []
         self.requests = []
@@ -49,6 +49,9 @@ class InstrumentPanel:
                                                    ))
 
     def predraw(self):
+        background = (30,0,40)
+        if self.state["delete"] :
+            background = ((200,0,0))
         self.surface_panel.fill((30, 30, 40))
         py.draw.line(self.surface_panel, (255, 255, 255), (0, 0), (0, self.height), 3)  # down
         py.draw.line(self.surface_panel, (255, 255, 255), (0, self.height), (self.width, self.height), 3)  # down
@@ -59,12 +62,12 @@ class InstrumentPanel:
 
         for i in range(len(self.instruments_sprites)):
             self.instruments_sprites[i].rect.topleft = (10, 30 + i * 50)
+            self.instruments_sprites[i].predraw(background)
             self.surface_panel.blit(self.instruments_sprites[i].image, self.instruments_sprites[i].rect)
 
     def draw(self):
-        print("Drawn")
+        print("Drawn state delete:",self.state["delete"])
         self.predraw()
-        pass
 
     def read_instrumentslist(self):
         """Read the instrumentlist and returns the list of
@@ -86,16 +89,28 @@ class InstrumentPanel:
         print(x, y)
 
         # checks if any instrument is clicked
+        instrument_clicked = False
         for sprite in self.instruments_sprites:
             if sprite.rect.collidepoint((x, y)):
-                self.requests.append({"clicked": sprite.index})
+                if not self.state["delete"]:
+                    self.requests.append({"clicked": sprite.index})
+                else:
+                    self.requests.append({"delete": sprite.index})
+                    self.state["delete"] = False
+                instrument_clicked = True
+                break
+        if self.state["delete"]:
+            if not instrument_clicked:
+                print("outclick")
+                self.state["delete"] = False
+                self.predraw()
 
-        # add box
         if x > 8 and x < 8 + 16 and y > 8 and y < 8 + 16:
             self.requests.append("instruments")
             self.seekresponse = True
             pass
         elif x > 32 and x < 32 + 16 and y > 8 and y < 8 + 16:
+            self.state["delete"] = True
             pass
         # delete box
         print("Handled by Instrument panel")

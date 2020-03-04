@@ -184,6 +184,7 @@ class Pianoroll:
     def draw_notes(self):
         print(len(self.notes_index))
         if len(self.notes_index) > 0:
+            print("Length:",len(self.notes_index),self.selected_track)
             for y, x in self.notes_index[self.selected_track]:
                 j = (x * 20 * self.controls["h_zoom"] + self.controls["timebar"]) + 20
                 if j + 20 * self.controls["h_zoom"] * (2 ** self.notes[self.selected_track][y][x]) - 2 >= 20 and j < 800:
