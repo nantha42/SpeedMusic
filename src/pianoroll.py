@@ -1,7 +1,7 @@
-import pygame as py
+
 import pygame.gfxdraw
 import numpy as np
-from music21 import *
+
 from font import *
 from pypianoroll import Track, Multitrack
 from matplotlib import pyplot as plt
@@ -14,7 +14,7 @@ class Pianoroll:
 
         self.pianoroll = py.Surface((self.width, self.height))
         self.controls = {"fast_move_piano_roll": False, "h_zoom": 1, "timebar": 0, "bar_move_velocity": 0,
-                         "make_velocity_0": True, "nthnote": 2}
+                         "make_velocity_0": True, "nthnote": 2, "time_start": 0, "measure_passed": 0, "tempo": 120}
         self.measures = measures
         py.font.init()
 
@@ -64,7 +64,7 @@ class Pianoroll:
         is written to the file system
         :return:
         """
-        print(self.programs)
+        # print(self.programs)
         pianorolls = []
         for track in self.notes:
             pianoroll = np.zeros((track.shape[1] * 3, 128))
@@ -72,7 +72,6 @@ class Pianoroll:
             for i in range(track.shape[0]):
                 note_track = np.array(track[i, :])
                 note_track += 1
-
                 notes_pos = np.nonzero(note_track)
                 f = 3
                 for pos in notes_pos[0]:
@@ -85,7 +84,7 @@ class Pianoroll:
         print(self.notes_index)
         tracks = []
         for i in range(len(pianorolls)):
-            tracker = Track(pianoroll=pianorolls[i],program=self.programs[i])
+            tracker = Track(pianoroll=pianorolls[i], program=self.programs[i])
             tracks.append(tracker)
         multitrack = Multitrack(tracks=tracks)
         multitrack.write("create1.mid")
@@ -95,12 +94,35 @@ class Pianoroll:
             # tracker.plot()
             # plt.show()
 
+    def play_single_note(self,s):
+        """
+            Plays a single clicked note at a particular point
+            :return:
+        """
+
+        maxindex = np.argmax(self.notes[self.selected_track][:,s])
+
+        maxdura = self.notes[self.selected_track][:,s][maxindex]+1
+        # temp_matrix = np.zeros((48,2**dura))
+
+        temp_matrix = np.zeros((int((2**(maxdura))),128))
+        for i  in range(len(self.notes[self.selected_track][:,s])):
+            note = self.notes[self.selected_track][:,s][i]
+            if note > -1:
+                temp_matrix[0:int((2**(note))),83-i] = 90
+        print(temp_matrix.shape)
+        tracker = Track(pianoroll=temp_matrix, program=self.programs[self.selected_track])
+        multitrack = Multitrack(tracks=[tracker])
+        multitrack.write("play_note.mid")
+
+
     def update(self):
         """
         Updates the pianoroll surface draws such as the
         vertical lines, numberline, notes.
         :return:
         """
+        #print("timebar:", self.controls["timebar"])
         roll_index = 0
         key_color = [0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0]
         key_color.reverse()
@@ -175,19 +197,23 @@ class Pianoroll:
 
     def enternote(self, s, k):
         if s < self.notes[self.selected_track].shape[1] and self.notes[self.selected_track][k, s] != -1:
+            #for removing note
             self.notes[self.selected_track][k, s] = -1
             self.notes_index[self.selected_track].remove([k, s])
         elif s < self.notes[self.selected_track].shape[1]:
+            #Enters note in note_index
             self.notes[self.selected_track][k, s] = self.controls["nthnote"]
             self.notes_index[self.selected_track].append([k, s])
+            self.play_single_note(s)
 
     def draw_notes(self):
-        print(len(self.notes_index))
+        # print(len(self.notes_index))
         if len(self.notes_index) > 0:
-            print("Length:",len(self.notes_index),self.selected_track)
+            # print("Length:", len(self.notes_index), self.selected_track)
             for y, x in self.notes_index[self.selected_track]:
                 j = (x * 20 * self.controls["h_zoom"] + self.controls["timebar"]) + 20
-                if j + 20 * self.controls["h_zoom"] * (2 ** self.notes[self.selected_track][y][x]) - 2 >= 20 and j < 800:
+                if j + 20 * self.controls["h_zoom"] * (
+                        2 ** self.notes[self.selected_track][y][x]) - 2 >= 20 and j < 800:
                     py.draw.rect(self.pianoroll, (200, 0, 0), (
                         (x * 20 * self.controls["h_zoom"] + self.controls["timebar"]) + 20, y * 10 + 10 + 2,
                         20 * self.controls["h_zoom"] * (2 ** self.notes[self.selected_track][y][x]) - 2, 10 - 2))
@@ -223,14 +249,15 @@ class Pianoroll:
             if note_index >= 0 and note_index < 48:
                 for pos, dura in notes_track:
                     if int(pos) < array.shape[1]:
-                        print(47 - note_index, int(pos), array.shape, np.log2(dura))
+                        # print(47 - note_index, int(pos), array.shape, np.log2(dura))
                         array[47 - note_index][int(pos)] = np.log2(dura)
-                        self.notes_index.append([47 - note_index, int(pos)])
-        self.notes = array
-        print(self.notes_index)
+                        self.notes_index[self.selected_track].append([47 - note_index, int(pos)])
+        self.notes[self.selected_track] = array
+        # print(self.notes_index)
 
     def clear_current_track(self):
         self.notes[self.selected_track] = self.notes[self.selected_track] * 0
         self.notes[self.selected_track] = self.notes[self.selected_track] - 1
         self.notes_index[self.selected_track] = []
-        print("Cleared")
+        # print("Cleared")
+

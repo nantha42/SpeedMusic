@@ -6,11 +6,12 @@ from jarvis import *
 from instrument_panel import *
 import time
 from add_instruments_panel import *
-
+from model_panel import *
+from change_model_panel import  *
 
 class Display:
 
-    def __init__(self, mes, file=""):
+    def __init__(self, mes, file="", inp_length=256):
         py.display.init()
         self.width = 1000
         self.height = 800
@@ -22,14 +23,16 @@ class Display:
         self.j = 10
         self.model_name = "models/modelDNoEmbed.h5"
         self.controls = {"right_click": False, "play": False, "move_piano_roll_left": False, "update_ipanel": True,
-                         "move_piano_roll_right": False, "playing": False, "show_map": False}
+                         "move_piano_roll_right": False, "playing": False, "show_map": False, "microplay": False}
         self.events = {"update_pianoroll": True}
         self.event_handled = True
         self.quit = False
         self.window = None
         self.instrument_panel = InstrumentPanel()
-
+        self.model_panel = ModelPanel()
+        self.loaded_model = None
         self.openfile = False
+        self.input_length = inp_length
         if file == "":
             self.openfile = False
             self.file = ""
@@ -83,6 +86,17 @@ class Display:
             self.events["update_pianoroll"] = True
             self.win.blit(self.instrument_panel.surface_panel, (10, 100))
 
+        if self.controls["play"]:
+            self.events["update_pianoroll"] = True
+            time_start = self.pianoroll.controls["time_start"]
+            ratio = self.pianoroll.controls["tempo"] / 60
+            time_measures = ((time.time() - time_start) * ratio) / (4)
+            print("time_measures", time_measures)
+            if time_measures > self.pianoroll.controls["measure_passed"]:
+                self.pianoroll.controls["measure_passed"] = time_measures
+                self.pianoroll.controls["timebar"] = -self.pianoroll.controls["measure_passed"] * 640 * \
+                                                     self.pianoroll.controls["h_zoom"]
+
     def draw_controls(self):
         self.button_note = py.image.load(self.image_loc + str(
             2 ** self.pianoroll.controls["nthnote"]) + "_on.png")
@@ -96,6 +110,7 @@ class Display:
         self.win.blit(self.symbol_measure, (550, 30))
         self.win.blit(self.button_addm, (580, 30))
         self.win.blit(self.button_subm, (580, 46))
+        self.win.blit(self.model_panel.image, (620, 30))
 
         if self.controls["move_piano_roll_left"] or self.controls["move_piano_roll_right"]:
             self.pianoroll.controls["make_velocity_0"] = False
@@ -143,6 +158,48 @@ class Display:
                 if event.button == 3:
                     self.controls["right_click"] = True
 
+            if event.type == py.MOUSEBUTTONUP:
+                self.event_handled = True
+                self.events["update_pianoroll"] = True
+                x, y = py.mouse.get_pos()
+                print(x, y)
+
+                if self.window is not None:
+                    if (100 < x < (100 + self.window.width)) and (100 < y < (100 + self.window.height)):
+                        self.window.handle_events((x - 100, y - 100))
+
+                if 620 < x < (620 + 150) and 30 < y < 60:
+                    self.model_panel.handle_events((x, y))
+
+                if 10 < x < 175 and 100 < y < 600:
+                    self.instrument_panel.handle_events((x - 10, y - 100))
+
+                if 500 < x < 532 and 30 < y < 62:
+                    self.controls["play"] = not self.controls["play"]
+
+                # On clicking the pianoroll for entering notes
+                if 200 <= x <= 980 and 110 <= y <= 590 and self.controls["right_click"] == False:
+                    s = int((x - 200))
+                    k = int((y - 110))
+                    s = int((s - self.pianoroll.controls["timebar"]) / (20 * self.pianoroll.controls["h_zoom"]))
+                    k = int(k / 10)
+                    self.pianoroll.enternote(s, k)
+                    self.play(1)
+
+                if x >= 580 and x <= 596 and y >= 30 and y <= 62:
+                    if y >= 30 and y <= 46:
+                        self.pianoroll.measures += 1
+                        self.pianoroll.send_event("measure_increased")
+
+                    elif y >= 46 and y <= 62:
+                        if self.pianoroll.measures > 1:
+                            self.pianoroll.measures -= 1
+                            self.pianoroll.send_event("measure_decreased")
+                        # print("measure_decreased")
+                if event.button == 3:
+                    self.controls["right_click"] = False
+                    # print(self.pianoroll.notes)
+
             if event.type == py.KEYDOWN:
 
                 self.event_handled = True
@@ -178,9 +235,10 @@ class Display:
                 if event.key == py.K_g:
                     np.save("temp.npy", self.pianoroll.notes[self.pianoroll.selected_track])
                     print("Saved Temp")
-                    jarv = Melody(self.model_name)
-                    print(jarv.model.summary())
-                    jarv.input_length = 256
+                    self.model_name,self.input_length = self.model_panel.get_model_detail()
+                    jarv = Melody("models/"+self.model_name+".h5")
+
+                    jarv.input_length = self.input_length
                     # jarv.use_model()
                     jarv.generate_tune()
 
@@ -189,22 +247,24 @@ class Display:
                     print("Saved Temp")
                     jarv = Melody(self.model_name)
                     print(jarv.model.summary())
-                    jarv.input_length = 256
+                    jarv.input_length = self.input_length
                     jarv.use_model()
 
                 if event.key == py.K_e:
                     """Uses only the notes that is present in the 
                     pianoroll.notes_index"""
-                    jarv = Melody(self.model_name)
+                    if self.loaded_model == None:
+                        self.loaded_model = Melody(self.model_name)
+
                     use_notes = list()
 
                     for note_index in self.pianoroll.notes_index[self.pianoroll.selected_track]:
                         s, t = note_index
                         # print(note_index, note_index[0] * 6 + self.pianoroll.notes[self.pianoroll.selected_track][s][t])
                         use_notes.append(note_index[0] * 6 + self.pianoroll.notes[self.pianoroll.selected_track][s][t])
-                    jarv.input_length = 256
-                    jarv.input_data_to_model(self.pianoroll.notes[self.pianoroll.selected_track])
-                    jarv.random_noise()
+                    self.loaded_model.input_length = self.input_length
+                    self.loaded_model.input_data_to_model(self.pianoroll.notes[self.pianoroll.selected_track])
+                    self.loaded_model.random_noise()
 
                 if event.key == py.K_m:
                     self.controls["show_map"] = not self.controls["show_map"]
@@ -231,23 +291,24 @@ class Display:
                     print("Saved successfully")
 
                 if event.key == py.K_UP:
-                    if self.pianoroll.controls["h_zoom"] >= 1:
+                    if self.pianoroll.controls["h_zoom"] >= 1 and not self.controls["playing"]:
                         self.pianoroll.controls["h_zoom"] += 1
                         self.events["update_pianoroll"] = True
                         print(self.pianoroll.controls["h_zoom"])
 
                     else:
-                        self.pianoroll.controls["h_zoom"] *= 2
-                        self.events["update_pianoroll"] = True
+                        if not self.controls["playing"]:
+                            self.pianoroll.controls["h_zoom"] *= 2
+                            self.events["update_pianoroll"] = True
                     # print(self.pianoroll.controls["h_zoom"])
 
                 if event.key == py.K_DOWN:
 
-                    if self.pianoroll.controls["h_zoom"] > 1:
+                    if self.pianoroll.controls["h_zoom"] > 1 and not self.controls["playing"]:
                         self.pianoroll.controls["h_zoom"] -= 1
                         self.events["update_pianoroll"] = True
 
-                    elif self.pianoroll.controls["h_zoom"] > 0.25:
+                    elif self.pianoroll.controls["h_zoom"] > 0.50 and not self.controls["playing"]:
                         self.pianoroll.controls["h_zoom"] /= 2
                         self.events["update_pianoroll"] = True
                     # print(self.pianoroll.controls["h_zoom"])
@@ -266,6 +327,8 @@ class Display:
 
                 if event.key == py.K_SPACE:
                     self.controls["play"] = not self.controls["play"]
+                    self.pianoroll.controls["time_start"] = time.time()
+                    self.pianoroll.controls["measure_passed"] = 0
 
             if event.type == py.KEYUP:
                 self.events["update_pianoroll"] = True
@@ -281,45 +344,9 @@ class Display:
             if event.type == py.USEREVENT:
                 self.controls["play"] = False
                 self.controls["playing"] = False
+                self.controls["microplay"] = False
+                print("Stopping Music")
                 py.mixer.music.stop()
-
-            if event.type == py.MOUSEBUTTONUP:
-                self.event_handled = True
-                self.events["update_pianoroll"] = True
-                x, y = py.mouse.get_pos()
-                # print(x, y)
-                # On cliking the play button
-                if self.window != None:
-                    if x > 100 and x < 100 + self.window.width and y > 100 and y < 100 + self.window.height:
-                        self.window.handle_events((x - 100, y - 100))
-
-                if x > 10 and x < 175 and y > 100 and y < 600:
-                    self.instrument_panel.handle_events((x - 10, y - 100))
-
-                if x > 500 and x < 532 and y > 30 and y < 62:
-                    self.controls["play"] = not self.controls["play"]
-
-                # On clicking the pianoroll for entering notes
-                if x >= 200 and x <= 980 and y >= 110 and y <= 590 and self.controls["right_click"] == False:
-                    s = int((x - 200))
-                    k = int((y - 110))
-                    s = int((s - self.pianoroll.controls["timebar"]) / (20 * self.pianoroll.controls["h_zoom"]))
-                    k = int(k / 10)
-                    self.pianoroll.enternote(s, k)
-
-                if x >= 580 and x <= 596 and y >= 30 and y <= 62:
-                    if y >= 30 and y <= 46:
-                        self.pianoroll.measures += 1
-                        self.pianoroll.send_event("measure_increased")
-                        # print("measure_increased")
-                    elif y >= 46 and y <= 62:
-                        if self.pianoroll.measures > 1:
-                            self.pianoroll.measures -= 1
-                            self.pianoroll.send_event("measure_decreased")
-                        # print("measure_decreased")
-                if event.button == 3:
-                    self.controls["right_click"] = False
-                    # print(self.pianoroll.notes)
 
     def load_from_npy(self, file):
         array = np.load(file)
@@ -345,18 +372,26 @@ class Display:
         print("notes_index", self.pianoroll.notes_index)
         print("Successfully Loaded")
 
-    def play(self):
-        if self.controls["play"] == True and self.controls["playing"] == False:
-            self.pianoroll.play_notes(self.controls["show_map"])
-            py.mixer.music.load("create1.mid")
-            py.mixer.music.set_endevent(py.USEREVENT)
-            self.controls["playing"] = True
-            py.mixer.music.play()
-            # print("index", self.pianoroll.notes_index)
+    def play(self, option=0):
+        if option == 0 and not self.controls["microplay"]:
+            if self.controls["play"] == True and self.controls["playing"] == False:
+                self.pianoroll.play_notes(self.controls["show_map"])
+                py.mixer.music.load("create1.mid")
+                py.mixer.music.set_endevent(py.USEREVENT)
+                self.controls["playing"] = True
+                py.mixer.music.play()
+                # print("index", self.pianoroll.notes_index)
 
-        elif self.controls["play"] == False:
-            self.controls["playing"] = False
-            py.mixer.music.stop()
+            elif self.controls["play"] == False:
+                self.controls["playing"] = False
+                py.mixer.music.stop()
+        else:
+            print("State", self.controls["play"], self.controls["playing"])
+            if self.controls["play"] == False and self.controls["playing"] == False and not self.controls["microplay"]:
+                py.mixer.music.load("play_note.mid")
+                py.mixer.music.set_endevent(py.USEREVENT)
+                py.mixer.music.play()
+                self.controls["microplay"] = True
 
     def find_closer(self, x):
         """
@@ -440,74 +475,84 @@ class Display:
         # print(self.instrument_panel.requests, self.window)
 
         if len(self.instrument_panel.requests) > 0:
-            req = self.instrument_panel.requests.pop(0)
-            print(req)
-            if req == "instruments":
-                if self.window == None:
-                    self.window = AddInstrumentPanel()
-                # print("Window:", self.window)
+            if self.window is None:
+                req = self.instrument_panel.requests.pop(0)
+                print(req)
+                if req == "instruments":
+                    if self.window == None:
+                        self.window = AddInstrumentPanel()
+                    # print("Window:", self.window)
 
-            elif type(req) == type({}):
-                if "clicked" in req.keys():
-                    instrument_selected = req["clicked"]
-                    print("PProgramno", instrument_selected)
-                    # self.pianoroll.add_track(instrument_selected)
-                    self.pianoroll.selected_track = instrument_selected
-                    self.events["update_pianoroll"] = True
-                if "delete" in req.keys():
-                    delete_instrument_index = req["delete"]
-                    if self.pianoroll.selected_track == delete_instrument_index and self.pianoroll.n_tracks > 1:
-                        self.pianoroll.selected_track = 0
+                elif type(req) == type({}):
+                    if "clicked" in req.keys():
+                        instrument_selected = req["clicked"]
+                        print("PProgramno", instrument_selected)
+                        # self.pianoroll.add_track(instrument_selected)
+                        self.pianoroll.selected_track = instrument_selected
+                        self.events["update_pianoroll"] = True
+                    if "delete" in req.keys():
+                        delete_instrument_index = req["delete"]
+
                         if self.pianoroll.n_tracks > 1:
-                            self.pianoroll.n_tracks -= 1
-                            # print(type(self.pianoroll.notes),delete_instrument_index)
-                            self.pianoroll.notes.pop(delete_instrument_index)
-                            self.pianoroll.notes_index.pop(delete_instrument_index)
-                            self.instrument_panel.instruments_used.pop(delete_instrument_index)
-                            self.instrument_panel.instruments_sprites.pop(delete_instrument_index)
-                            start = 0
-                            for sprite in self.instrument_panel.instruments_sprites:
-                                sprite.index = start
-                                start += 1
-                            self.instrument_panel.update()
+                            self.pianoroll.selected_track = 0
+                            if delete_instrument_index > self.pianoroll.selected_track:
+                                self.pianoroll.n_tracks -= 1
+                                # print(type(self.pianoroll.notes),delete_instrument_index)
 
-                    elif self.pianoroll.n_tracks > 1:
-                        self.pianoroll.selected_track = 0
-                        if delete_instrument_index > self.pianoroll.selected_track:
-                            self.pianoroll.n_tracks -= 1
-                            # print(type(self.pianoroll.notes),delete_instrument_index)
-                            self.pianoroll.notes.pop(delete_instrument_index)
-                            self.pianoroll.notes_index.pop(delete_instrument_index)
-                            self.instrument_panel.instruments_used.pop(delete_instrument_index)
-                            self.instrument_panel.instruments_sprites.pop(delete_instrument_index)
-                            start = 0
-                            for sprite in self.instrument_panel.instruments_sprites:
-                                sprite.index = start
-                                start += 1
-                            self.instrument_panel.update()
-                        else:
-                            self.pianoroll.selected_track -= 1
-                            self.pianoroll.n_tracks -= 1
-                            # print(type(self.pianoroll.notes),delete_instrument_index)
-                            self.pianoroll.notes.pop(delete_instrument_index)
-                            self.pianoroll.notes_index.pop(delete_instrument_index)
-                            self.instrument_panel.instruments_used.pop(delete_instrument_index)
-                            self.instrument_panel.instruments_sprites.pop(delete_instrument_index)
-                            start = 0
-                            for sprite in self.instrument_panel.instruments_sprites:
-                                sprite.index = start
-                                start += 1
-                            self.instrument_panel.update()
+                                self.pianoroll.notes.pop(delete_instrument_index)
+                                self.pianoroll.notes_index.pop(delete_instrument_index)
+                                self.pianoroll.programs.pop(delete_instrument_index)
+                                self.instrument_panel.instruments_used.pop(delete_instrument_index)
+                                self.instrument_panel.instruments_sprites.pop(delete_instrument_index)
+
+                                start = 0
+                                for sprite in self.instrument_panel.instruments_sprites:
+                                    sprite.index = start
+                                    start += 1
+                                self.instrument_panel.update()
+                            else:
+                                self.pianoroll.selected_track -= 1
+                                self.pianoroll.n_tracks -= 1
+                                # print(type(self.pianoroll.notes),delete_instrument_index)
+
+                                self.pianoroll.notes.pop(delete_instrument_index)
+                                self.pianoroll.notes_index.pop(delete_instrument_index)
+                                self.pianoroll.programs.pop(delete_instrument_index)
+                                self.instrument_panel.instruments_used.pop(delete_instrument_index)
+                                self.instrument_panel.instruments_sprites.pop(delete_instrument_index)
+
+                                start = 0
+                                for sprite in self.instrument_panel.instruments_sprites:
+                                    sprite.index = start
+                                    start += 1
+                                self.instrument_panel.update()
+
+        if len(self.model_panel.requests) > 0:
+            print("@Request")
+            print(self.window)
+            if self.window is None:
+                req = self.model_panel.requests.pop(0)
+
+                if req == "open":
+                    self.window = ChangeModelPanel(self.model_panel.get_models_list())
+
+
 
         if self.window != None:
             if len(self.window.requests) > 0:
                 req = self.window.requests.pop(0)
                 if req == "close":
                     # Get the value returned from the window
-                    self.instrument_panel.add_instrument(self.window.result)
-                    self.pianoroll.add_track(self.window.result)
-                    self.controls["update_ipanel"] = True
-                    self.window = None
+                    if isinstance(self.window,AddInstrumentPanel):
+                        self.instrument_panel.add_instrument(self.window.result)
+                        self.pianoroll.add_track(self.window.result)
+                        self.controls["update_ipanel"] = True
+                        self.window = None
+                    elif isinstance(self.window,ChangeModelPanel):
+                        self.model_panel.selected_model_index = self.window.result[0]
+                        self.model_panel.update()
+                        self.window = None
+                        self.controls["update_ipanel"] = True
 
     def run(self):
         while not self.quit:
@@ -522,7 +567,6 @@ if __name__ == '__main__':
     file = "data/again.mid"
     if len(sys.argv) == 2:
         file = sys.argv[1]
-
-    d = Display(80)
-    d.model_name = "models/modelA.h5"
+    d = Display(mes=80, inp_length=1024, file=file)
+    d.model_name = "models/master.h5"
     d.run()

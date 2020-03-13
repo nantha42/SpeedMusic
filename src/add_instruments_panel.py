@@ -133,6 +133,7 @@ class AddInstrumentPanel:
                     id = sprite.id
                     selected_some = True
                     break
+
             if selected_some:
                 if self.selected_itype != -1:
                     self.spritebox_itypes[self.selected_itype].deselect()

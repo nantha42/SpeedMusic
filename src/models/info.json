@@ -1,0 +1,12 @@
+[
+	{"modelA":256},
+	{"modelmonger":512},
+	{"modelJ":512},
+	{"modelKgeneralisation":512},
+	{"modelKgeneralisation1":512},
+	{"modelK":512},
+	{"modelDNoEmbed1":512},
+	{"modelDNoEmbed":512},
+	{"master": 1024},
+	{"master1": 1024}
+]

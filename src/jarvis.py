@@ -280,6 +280,7 @@ class Melody:
                 self.rest_index.append(i)
             rest_index = self.rest_index
         """
+        self.melody = []
         self.melody.append(0)
         for i in range(nparray.shape[1]):
             row = nparray[:, i]
@@ -515,9 +516,9 @@ class Melody:
         # print("Self.melody",self.melody.layers)
         k = self.melody[1:-1]
         notes_used = list(set(k))
-
+        self.melody = []
         print("Notesused", notes_used)
-        for i in range(290):
+        for i in range(self.input_length+10):
             self.melody.append(np.random.choice(notes_used))
         x, y = self.melody_to_dataset(option=1)
         print(x.shape)
@@ -572,63 +573,91 @@ class Melody:
     def generate_tune(self):
         try:
             self.model = load_model(self.model_name)
+            print(self.model.summary())
             print("Model loaded from disk")
         except Exception:
             print("Error in loading model")
         sample = np.load("temp.npy")
         self.input_data_to_model(sample)
         self.melody.pop(-1)
-        print("After Pop",self.melody)
-        # x, y = self.melody_to_dataset(option=1)
-        # step = 5
+        while len(self.melody) < self.input_length:
+            self.melody.extend(self.melody[1:])
         print("Length:", len(self.melody))
         original_length = len(self.melody)
         print(original_length, self.input_length)
-        if original_length < self.input_length:
-            rem = self.input_length - original_length
-            self.melody.extend([68] * (rem + 10))
-            exception_occured = False
-            while original_length < self.input_length:
-                print("Inside Loop")
-                for r in range(rem):
-                    if exception_occured:
-                        print("Exception")
-                        break
-                    input = []
-                    output = []
-                    for i in range(0, len(self.melody) - self.input_length, self.input_length):
-                        ip = []
-                        # print(i, len(self.melody) - self.input_length, step)
-                        for q in self.melody[i:i + self.input_length]:
-                            o = np.zeros(self.notes_classes)
-                            o[int(q)] = 1
-                            ip.append(o)
-                        input.append(ip)
-                        jp = []
-                        for q in self.melody[i + 1:i + 1 + self.input_length]:
-                            o = np.zeros(self.notes_classes)
-                            o[int(q)] = 1
-                            jp.append(o)
-                        output.append(jp)
 
-                    print("Going to Predict")
-                    prediction = self.model.predict(np.array(input))
-                    generated = []
-                    for measure in prediction:
-                        for row in measure:
-                            generated.append(int(np.argmax(row)))
-                    print(generated)
-                    print("Reinserting generated into melody", generated[original_length])
-                    self.melody[original_length] = generated[original_length]
-                    original_length += 1
+        input = []
+        output = []
+        for i in range(0, len(self.melody) - self.input_length, self.input_length):
+            ip = []
+            # print(i, len(self.melody) - self.input_length, step)
+            for q in self.melody[i:i + self.input_length]:
+                o = np.zeros(self.notes_classes)
+                o[int(q)] = 1
+                ip.append(o)
+            input.append(ip)
+            jp = []
+            for q in self.melody[i + 1:i + 1 + self.input_length]:
+                o = np.zeros(self.notes_classes)
+                o[int(q)] = 1
+                jp.append(o)
+            output.append(jp)
 
-                    print("Exception Occured")
-                    exception_occured = True
-                if exception_occured:
-                    print("Exception occured")
-                    break
-                print(self.melody)
-            self.converter(self.melody)
+        print("Going to Predict")
+        x = list(input[0])
+        y = list(output[0])
+        input = [x]*7
+        output = [y]*7
+
+        prediction = self.model.predict(np.array(input))
+        generated = []
+        for measure in prediction:
+            for row in measure:
+                generated.append(int(np.argmax(row)))
+        print(generated)
+        self.converter(generated)
+
+    def generate_tune1(self):
+        try:
+            self.model = load_model(self.model_name)
+            print("Model loaded from disk")
+        except Exception:
+            print("Error in loading model")
+        sample = np.load("temp.npy")
+        self.input_data_to_model(sample)
+        self.melody.pop(-1)
+        while len(self.melody) < self.input_length:
+            self.melody.extend(self.melody[1:])
+        print("Length:", len(self.melody))
+        original_length = len(self.melody)
+        print(original_length, self.input_length)
+
+        input = []
+        output = []
+        for i in range(0, len(self.melody) - self.input_length, self.input_length):
+            ip = []
+            # print(i, len(self.melody) - self.input_length, step)
+            for q in self.melody[i:i + self.input_length]:
+                o = np.zeros(self.notes_classes)
+                o[int(q)] = 1
+                ip.append(o)
+            input.append(ip)
+            jp = []
+            for q in self.melody[i + 1:i + 1 + self.input_length]:
+                o = np.zeros(self.notes_classes)
+                o[int(q)] = 1
+                jp.append(o)
+            output.append(jp)
+
+        print("Going to Predict")
+        prediction = self.model.predict(np.array(input))
+        generated = []
+        for measure in prediction:
+            for row in measure:
+                generated.append(int(np.argmax(row)))
+        print(generated)
+
+        self.converter(self.melody)
 
     def use_model(self):
         try:
