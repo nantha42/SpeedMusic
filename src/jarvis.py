@@ -1,310 +1,155 @@
-import traceback
+from keras.optimizers import RMSprop
 from keras.models import Sequential
 from keras.layers import LSTM
+from keras.layers import Embedding
 from keras.layers import Dropout
 from keras.layers import Dense
 from keras.layers import Activation
 from keras.models import load_model
+from keras.layers import BatchNormalization as BatchNorm
+import matplotlib.pyplot as plt
+
 from keras.callbacks import LambdaCallback
 from keras.utils import Sequence
 import keras.metrics as metrics
 import numpy as np
 import os
-
-
-
-class Generator(Sequence):
-    # Class is a dataset wrapper for better training performance
-    def __init__(self, x_set, y_set, batch_size=4):
-        self.x, self.y = x_set, y_set
-        self.batch_size = batch_size
-        self.indices = np.arange(self.x.shape[0])
-        self.musicdataset = []
-        self.melody = []
-
-    def __len__(self):
-        print("Infinitywar", self.x.shape[0], self.batch_size, np.ceil(self.x.shape[0] / self.batch_size))
-        print("x shape", self.x.shape)
-        return int(np.ceil(self.x.shape[0] / self.batch_size))
-
-    def __getitem__(self, idx):
-        inds = self.indices[idx * self.batch_size:(idx + 1) * self.batch_size]
-        batch_x = self.x[inds]
-        batch_y = self.y[inds]
-        return batch_x, batch_y
-
-    def on_epoch_end(self):
-        # np.random.shuffle(self.indices)
-        """
-        idxs = list(range(len(self.musicdataset)))
-        self.melody = []
-        np.random.shuffle(idxs)
-        #print("Idxs", idxs)
-        for id in idxs:
-            self.input_data_to_model(self.musicdataset[id])
-        self.x, self.y = self.melody_to_dataset()
-        rr = self.x
-        #print("Shape of melody", rr.shape)
-        """
-        self.melody = []
-        list_offiles = os.listdir("saved/")
-        choosen_files = []
-        for r in range(7):
-            while True:
-                ch = np.random.randint(0, len(list_offiles))
-                if list_offiles[ch][-4:] == ".npy":
-                    choosen_files.append(list_offiles[ch])
-                    break
-
-        for saved in choosen_files:
-            if saved[-4:] == ".npy":
-                print(saved)
-                sample = np.load("saved/" + saved)
-                self.input_data_to_model(sample)
-                # self.musicdataset.append(sample)
-        inp, out = self.melody_to_dataset()
-        print("InpShape", inp.shape)
-
-    def input_data_to_model(self, nparray):
-        rest = 0
-        rest_index = []
-
-        # Rest array preparation
-        for i in range(1, 32):
-            rest_index.append(i)
-        # print("Length of Melody",len(self.melody))
-        for i in range(nparray.shape[1]):
-            row = nparray[:, i]
-            notefound = False
-            for j in range(48):
-                if row[j] != -1:
-                    self.melody.append(j * 6 + row[j])
-                    notefound = True
-                    break
-            # Below code is for inserting a symbol for rest duration in music
-            if notefound:
-                if rest > 0:
-                    # e = np.abs(rest_index-rest).argmin()
-                    n32rests = rest / 32
-                    remrest = rest % 32
-                    for o in range(int(n32rests)):
-                        self.melody.append(287 + 32)
-                    # index = 288+e
-                    self.melody.append(287 + remrest)
-                rest = 0
-            else:
-                rest += 1
-        # print("Melody is", self.melody)
-        # print(set(self.melody))
-        ay = np.bincount(self.melody)
-
-        # print("Frequency",np.vstack((ai,ay[ai])).T)
-
-    def melody_to_dataset(self):
-        input = []
-        output = []
-        for i in range(0, len(self.melody) - 128, 3):
-            # input.append(melody[i:i+32])
-            ip = []
-            for q in self.melody[i:i + 128]:
-                o = np.zeros(321)
-                o[int(q)] = 1
-                ip.append(o)
-            input.append(ip)
-            jp = []
-            for q in self.melody[i + 1:i + 1 + 128]:
-                o = np.zeros(321)
-                o[int(q)] = 1
-                jp.append(o)
-            output.append(jp)
-
-        return [np.array(input), np.array(output)]
+import time
+import pickle
 
 
 class Generator2(Sequence):
     # Class is a dataset wrapper for better training performance
     def __init__(self, x_set, y_set, batch_size=4):
         self.x, self.y = x_set, y_set
-
         self.batch_size = batch_size
-        self.indices = np.arange(self.x.shape[0])
+        self.indices = np.arange(len(self.x))
         self.musicdataset = []
         self.melody = []
 
     def __len__(self):
-        return int(np.ceil(self.x.shape[0] / self.batch_size))
+        # return int(np.ceil(len(self.x) / self.batch_size))
+        # print("__len__",)
+        # print("__len__",int(np.ceil(len(self.musicdataset)/self.batch_size)))
+        return int(np.ceil(len(self.musicdataset) / self.batch_size))
 
     def __getitem__(self, idx):
+        # print()
+        # print("Entering __getitem__")
+        inds = []
+        for song in self.musicdataset[idx * self.batch_size:(idx + 1) * self.batch_size]:
+            start = song[0]
+            end = song[1]
+            # print("Extending ",start,":",end)
+            inds.extend(self.indices[start:end])
+
         inds = self.indices[idx * self.batch_size:(idx + 1) * self.batch_size]
+        # print("Inds:",inds)
         batch_x = []
         batch_y = []
         for ind in inds:
-            batch_x.append(self.x[ind])
+            ip = []
+            for q in self.x[ind]:
+                o = np.zeros(323 + 1 + 1)
+                o[int(q)] = 1
+                ip.append(o)
+
+            batch_x.append(ip)
             hot_encoded = []
             for val in self.y[ind]:
-                t = np.zeros(323)
+                t = np.zeros(323 + 1 + 1)
                 t[int(val)] = 1
                 hot_encoded.append(t)
             batch_y.append(hot_encoded)
-            # batch_x = np.array(self.x[idx * self.batch_size:(idx + 1) * self.batch_size])
-            # batch_y = np.array(self.y[idx * self.batch_size:(idx + 1) * self.batch_size])
-
         return np.array(batch_x), np.array(batch_y)
 
     def on_epoch_end(self):
         # np.random.shuffle(self.indices)
-        """
-        idxs = list(range(len(self.musicdataset)))
-        self.melody = []
-        np.random.shuffle(idxs)
-        #print("Idxs", idxs)
-        for id in idxs:
-            self.input_data_to_model(self.musicdataset[id])
-        self.x, self.y = self.melody_to_dataset()
-        rr = self.x
-        #print("Shape of melody", rr.shape)
-        self.melody = []
-        list_offiles = os.listdir("saved/")
-        choosen_files = []
-        for r in range(7):
-            while True:
-                ch = np.random.randint(0, len(list_offiles))
-                if list_offiles[ch][-4:] == ".npy":
-                    choosen_files.append(list_offiles[ch])
-                    break
-
-        for saved in choosen_files:
-            if saved[-4:] == ".npy":
-                print(saved)
-                sample = np.load("saved/" + saved)
-                self.input_data_to_model(sample)
-                # self.musicdataset.append(sample)
-        inp, out = self.melody_to_dataset()
-        print("InpShape", inp.shape)
-        """
-        np.random.shuffle(self.indices)
-
-
-    def input_data_to_model(self, nparray):
-        rest = 0
-        rest_index = []
-
-        # Rest array preparation
-        for i in range(1, 32):
-            rest_index.append(i)
-        # print("Length of Melody",len(self.melody))
-        for i in range(nparray.shape[1]):
-            row = nparray[:, i]
-            notefound = False
-            for j in range(48):
-                if row[j] != -1:
-                    self.melody.append(j * 6 + row[j])
-                    notefound = True
-                    break
-            # Below code is for inserting a symbol for rest duration in music
-            if notefound:
-                if rest > 0:
-                    # e = np.abs(rest_index-rest).argmin()
-                    n32rests = rest / 32
-                    remrest = rest % 32
-                    for o in range(int(n32rests)):
-                        self.melody.append(287 + 32)
-                    # index = 288+e
-                    self.melody.append(287 + remrest)
-                rest = 0
-            else:
-                rest += 1
-        # print("Melody is", self.melody)
-        # print(set(self.melody))
-        ay = np.bincount(self.melody)
-
-        # print("Frequency",np.vstack((ai,ay[ai])).T)
-
-    def melody_to_dataset(self):
-        input = []
-        output = []
-        for i in range(0, len(self.melody) - 128, 3):
-            # input.append(melody[i:i+32])
-            ip = []
-            for q in self.melody[i:i + 128]:
-                o = np.zeros(321)
-                o[int(q)] = 1
-                ip.append(o)
-            input.append(ip)
-            jp = []
-            for q in self.melody[i + 1:i + 1 + 128]:
-                o = np.zeros(321)
-                o[int(q)] = 1
-                jp.append(o)
-            output.append(jp)
-
-        return [np.array(input), np.array(output)]
-
-class Melody:
-    def __init__(self, model_name, epochs=10):
-        self.hidden_size = 321
-        self.input_length = 128
-        self.notes_classes = 323
-        self.model = Sequential()
-        self.epochs = epochs
-        # self.model.add(Embedding(self.notes_classes, self.hidden_size, input_length=self.input_length))
-        self.model.add(LSTM(self.hidden_size, input_shape=(self.input_length,self.notes_classes), return_sequences=True), )
-        self.model.add(Dropout(0.3))
-        self.model.add(LSTM(self.hidden_size, return_sequences=True), )
-        self.model.add(Dropout(0.3))
-        self.model.add(Dense(300))
-        self.model.add(Activation('relu'))
-        self.model.add(Dense(self.notes_classes))
-        self.model.add(Activation('softmax'))
-        self.input_data = None
-        self.rest_index = []
-        """
-        #self.model.add(LSTM(self.hidden_size, return_sequences=True))
-        #self.model.add(Dropout(0.3))"""
-        self.model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['categorical_accuracy'])
-        self.melody = []
-        self.musicdataset = []
-        self.model_name = model_name
+        np.random.shuffle(self.musicdataset)
         pass
 
-    def input_data_to_model(self, nparray):
-        rest = 0
-        rest_index = []
 
-        # Rest array preparation
-        """
-        if  len(self.rest_index) == 32:
-            rest_index = self.rest_index
-        else:
-            for i in range(1, 32):
-                self.rest_index.append(i)
-            rest_index = self.rest_index
-        """
+histories = {'categorical_accuracy': [], 'val_categorical_accuracy': [], 'loss': [], 'val_loss': []}
+
+
+class Melody:
+    def __init__(self, name, input_length, hidden_size=256, epochs=10):
+        self.hidden_size = hidden_size
+        self.input_length = input_length
+        self.notes_classes = 323 + 1 + 1  #
+        self.model = Sequential()
+        self.epochs = epochs
+        self.loaded_model = ""
+
+        self.directory = ""
+        self.input_data = None
+        self.model_name = name
+        self.inp = None
+        self.out = None
         self.melody = []
-        self.melody.append(0)
-        for i in range(nparray.shape[1]):
+        self.history = None
+        self.musicdataset = []
+        self.epochs_ran = 0
+        self.batch_size = 7
+        # self.model.add(Embedding(self.notes_classes, self.hidden_size, input_length=self.input_length))
+
+    def build_model(self):
+        if self.loaded_model != self.model_name:
+            print(self.notes_classes)
+            dropout = 0.4
+            self.model.add(
+                LSTM(self.hidden_size, input_shape=(self.input_length, self.notes_classes), return_sequences=True,
+                     recurrent_dropout=dropout), )
+            self.model.add(LSTM(self.hidden_size, recurrent_dropout=dropout, return_sequences=True))
+            self.model.add(BatchNorm())
+            self.model.add(Dropout(dropout))
+            self.model.add(Dense(256))
+            self.model.add(Activation('relu'))
+            self.model.add(BatchNorm())
+            self.model.add(Dropout(dropout))
+            self.model.add(Dense(256))
+            self.model.add(Activation('relu'))
+            self.model.add(BatchNorm())
+            self.model.add(Dense(self.notes_classes))
+            self.model.add(Activation('softmax'))
+            # self.directory = "drive/My Drive/DataProject/1"
+            self.model.compile(loss='categorical_crossentropy', optimizer='rmsprop', metrics=['categorical_accuracy'])
+            self.loaded_model = self.model_name
+
+    def input_data_to_model(self, nparray):
+
+        # 0 for starting music piece
+        # 1 for ending sequence
+        # 2 for start of a chord
+        # 3 for filling chord that are empty with keys
+        # every single note is chord
+        temp = [0]
+        rest = 0
+        for i in range(np.min([32 * 20, nparray.shape[1]])):
             row = nparray[:, i]
             notefound = False
-            for j in range(48):
-                if row[j] != -1:
-                    self.melody.append(2 + j * 6 + row[j])
-                    notefound = True
-                    break
+            args = np.nonzero(row + 1)[0]
 
-            # Below code is for inserting a symbol for rest duration in music
-            if notefound:
+            if len(args) > 0:
                 if rest > 0:
-                    # e = np.abs(rest_index-rest).argmin()
-                    n32rests = rest / 32
+                    n32rests = int(rest / 32)
                     remrest = rest % 32
-                    for o in range(int(n32rests)):
-                        self.melody.append(2+287 + 32)
-                    self.melody.append(2+287 + remrest)
+                    temp.extend([2, 2 + 1 + 1 + 287 + 32] * n32rests)
+                    temp.extend([2, 2 + 1 + 1 + 287 + remrest])
+
                 rest = 0
+                temp.append(2)
+                if len(args) >= 5:
+
+                    for v in args[:5]:
+                        temp.append(2 + 1 + 1 + v * 6 + row[v])
+                else:
+                    for v in args:
+                        temp.append(2 + 1 + 1 + v * 6 + row[v])
             else:
                 rest += 1
-        self.melody.append(1)
-        print("Self.melody", self.melody)
+        temp.append(1)
+        self.melody.append(temp)
 
     def melody_to_testdata_1(self):
         input = []
@@ -356,113 +201,11 @@ class Melody:
         print("prediction input shape", input.shape)
         return [input, output]
 
-    def isprime(self, x):
-        for i in range(2, int(np.sqrt(x))):
-            if x % i == 0:
-                return False
-        return True
-
-    def train2(self,x,y):
-        try:
-            self.model = load_model(self.model_name)
-            print("Model loaded from disk")
-        except Exception:
-            print("Error")
-        if self.isprime(x.shape[0]):
-            x = x[:-1]
-            y = y[:-1]
-
-        generator = Generator2(x,y,batch_size=30)
-
-
-    def train(self, x, y):
-        try:
-            self.model = load_model(self.model_name)
-            print("Model loaded from disk")
-        except Exception:
-            print("Error")
-
-        print(x.shape, y.shape)
-        if self.isprime(x.shape[0]):
-            x = x[:-1]
-            y = y[:-1]
-        print("Newshape", x.shape, y.shape)
-        self.input_data = x
-
-        # self.model.fit(z,[y[0]],epochs=5,verbose=1)
-        self.a, self.b = self.melody_to_testdata()
-        print_callback = LambdaCallback(self.on_epoch_end)
-        # generator = Generator(x,y)
-        # generator.musicdataset =self.musicdataset
-        # self.model.fit_generator(generator,epochs=self.epochs,verbose=1,callbacks=[print_callback])
-        print("Calling model.fit()")
-        # self.model.fit(x, y, epochs=self.epochs, validation_split=0.2, verbose=1, callbacks=[print_callback])
-
-        generator = Generator()
-        self.model.fit_generator()
-        self.model.save(self.model_name)
-        print("Predicting", self.a.shape)
-        prediction = self.model.predict(self.a)
-        print(prediction.shape)
-        generated = []
-        for measure in prediction:
-            for row in measure:
-                generated.append(np.argmax(row))
-        # print(generated)
-        print("Set of Generated", set(generated))
-        self.converter(generated)
-
-    def converter(self, j):
-        print("@Converter")
-        orray = np.ones([48, 1]) * -1
-        # print(j)
-        for i in range(len(j)):
-            krray = np.ones([48, 1]) * -1
-            if i % 1000 == 0:
-                print(i, len(j))
-            if j[i] < 288+2 and j[i]>1:
-                x = int(j[i])-2
-                p = int(x / 6)
-                v = int(x) % 6
-                krray[p, 0] = v
-
-                orray = np.append(orray, krray, axis=1)
-                for ta in range(0, (2 ** v) - 1):
-                    krray = np.ones([48, 1]) * -1
-                    orray = np.append(orray, krray, axis=1)
-            else:  # for adding rest rows to the melody
-                x = j[i] - 287-2
-                for z in range(x):
-                    orray = np.append(orray, krray, axis=1)
-                    # print("orray shape", orray.shape)
-        print("@Converter Entered data into orray")
-        print("@Converter Now Saving orray")
-        np.save("generated.npy", orray)
-        print("stored successfully")
-
-    def on_epoch_end(self, epoch_end, x):
-
-        print("a shape", self.a.shape)
-        prediction = self.model.predict(self.a)
-
-        print("Prediction shape", prediction.shape)
-        generated = []
-        for measure in prediction:
-            for row in measure:
-                generated.append(np.argmax(row))
-        # print(generated)
-        print("Set of Generated", set(generated))
-        print("Length of Generated", len(generated))
-        print("Calling Converter")
-        self.converter(generated)
-        print("Bact to on_epoch_end")
-        self.model.save(self.model_name)
-
     def melody_to_dataset(self, option=0):
-        step = 5
+        step = 2
         if option == 1:
             step = self.input_length
-        print(len(self.melody))
+
         input = []
         output = []
         for i in range(0, len(self.melody) - self.input_length, step):
@@ -486,142 +229,393 @@ class Melody:
         step = 2
         if option == 1:
             step = self.input_length
-
         input = []
         output = []
+        set_size = 30
+        self.musicdataset = []
+        print("melody length", len(self.melody), len(self.musicdataset))
         for i in range(0, len(self.melody) - self.input_length, step):
             ip = []
-            # print(i, len(self.melody) - self.input_length, step)
             for q in self.melody[i:i + self.input_length]:
                 ip.append(int(q))
             input.append(ip)
             jp = []
             for q in self.melody[i + 1:i + 1 + self.input_length]:
-                #o = np.zeros(self.notes_classes)
-                #o[int(q)] = 1
                 jp.append(int(q))
             output.append(jp)
+        for i in range(0, len(input), set_size):
+            self.musicdataset.append([i, i + set_size])
         print("Returning input and output from func melody_to_dataset")
-        return [input,output]
+        print(len(input), len(output))
+        return [input, output]
 
-    def random_noise(self):
-        # self.melody = []
+    def minimise(self):
+        minlen = 10 ** 10
+        temps = []
+        for i in range(len(self.melody)):
+            if len(self.melody[i]) < minlen and len(self.melody[i]) > 430:
+                minlen = len(self.melody[i])
+            elif len(self.melody[i]) < 430:
+                temps.append(self.melody[i])
+
+        for temp in temps:
+            self.melody.remove(temp)
+
+        for i in range(len(self.melody)):
+            self.melody[i] = self.melody[i][:minlen]
+            # y = len(self.melody[i])-1
+            # rem = 6 - y%6
+            # if rem == 5:
+            # self.melody[i][-1] = 1
+            # elif rem == 0:
+            # self.melody[i].append(1)
+            # else:
+            # self.melody[i].extend([3]*rem)
+            self.melody[i].append(1)
+            # print("Checking final length",len(self.melody[i]))
+        print("minised", minlen)
+        print("Minimised Applied")
+
+    def add_padding(self):
+
+        maxlen = 0
+        for i in range(len(self.melody)):
+            if len(self.melody[i]) > maxlen:
+                maxlen = len(self.melody[i])
+
+        for i in range(len(self.melody)):
+            self.melody[i].extend([1] * (maxlen - len(self.melody[i])))
+
+    def melody_to_datasetver3(self, option=0):
+
+        self.minimise()
+        step = 2
+        if option == 1:
+            step = self.input_length
+        input = []
+        output = []
+        set_size = 0
+        first = True
+        for t in range(len(self.melody)):
+
+            for i in range(0, len(self.melody[t]) - self.input_length, step):
+                ip = []
+                for q in self.melody[t][i:i + self.input_length]:
+                    ip.append(int(q))
+                input.append(ip)
+                jp = []
+                for q in self.melody[i + 1:i + 1 + self.input_length]:
+                    jp.append(int(q))
+                output.append(jp)
+
+            if first:
+                first = False
+                set_size = len(input)
+                print(len(input))
+                print(len(output))
+
+        for i in range(0, len(input), set_size):
+            self.musicdataset.append([i, i + set_size])
+        return input, output
+
+    def isprime(self, x):
+        for i in range(2, int(np.sqrt(x))):
+            if x % i == 0:
+                return False
+        return True
+
+    def train2(self):
+        x = self.inp
+        y = self.out
         try:
-            print("Loading model", self.model_name)
             self.model = load_model(self.model_name)
-            print("Model Loaded")
+            print("Model loaded from disk")
+            pass
         except Exception:
-            print("Error in loading model", self.model_name)
-        # print(dir(self.model))
-        # print("Self.melody",self.melody.layers)
-        k = self.melody[1:-1]
-        notes_used = list(set(k))
-        self.melody = []
-        print("Notesused", notes_used)
-        for i in range(self.input_length+10):
-            self.melody.append(np.random.choice(notes_used))
-        x, y = self.melody_to_dataset(option=1)
-        print(x.shape)
+            self.build_model()
+            print("Error")
+        if self.isprime(len(x)):
+            x = x[:-1]
+            y = y[:-1]
+        print("melody length", len(self.melody), len(self.musicdataset), len(x))
+        print_callback = LambdaCallback(self.on_epoch_end)
+        generator = Generator2(x, y, batch_size=7)
+        print(self.musicdataset[:int(len(self.musicdataset) - len(self.musicdataset) * 0.3)])
+        print(self.musicdataset[int(len(self.musicdataset) - len(self.musicdataset) * 0.3):])
+        validation_generator = Generator2(x, y, batch_size=self.batch_size)
+        generator.musicdataset = self.musicdataset[:int(len(self.musicdataset) - len(self.musicdataset) * 0.35)]
+        validation_generator.musicdataset = self.musicdataset[
+                                            int(len(self.musicdataset) - len(self.musicdataset) * 0.35):]
 
-        print("Predicting")
-        print(x.shape)
-        print(self.model.summary())
-        prediction = self.model.predict(x)
-        generated = []
-        print("Length of prediction", len(prediction))
-        for measure in prediction:
-            for row in measure:
-                generated.append(np.argmax(row))
-        # print(generated)
-        print("Length of Generated", generated)
-        self.converter(generated)
-        #except Exception:
-        print("Error in Random generation")
-        pass
+        for i in range(self.epochs):
+            print(i, "/", self.epochs)
+            self.history = self.model.fit_generator(generator, validation_data=validation_generator, epochs=10,
+                                                    verbose=1, callbacks=[print_callback])
 
-    def load_saved(self):
+            histories['categorical_accuracy'].extend(self.history.history['categorical_accuracy'])
+            histories['val_categorical_accuracy'].extend(self.history.history['val_categorical_accuracy'])
+            histories['loss'].extend(self.history.history['loss'])
+            histories['val_loss'].extend(self.history.history['val_loss'])
+
+            plt.plot(histories['categorical_accuracy'])
+            plt.plot(histories['val_categorical_accuracy'])
+            plt.title('Model accuracy')
+            plt.ylabel('Accuracy')
+            plt.xlabel('Epoch')
+            plt.legend(['Train', 'Test'], loc='upper left')
+            plt.show()
+
+            # Plot training & validation loss values
+            plt.plot(histories['loss'])
+            plt.plot(histories['val_loss'])
+            plt.title('Model loss')
+            plt.ylabel('Loss')
+            plt.xlabel('Epoch')
+            plt.legend(['Train', 'Test'], loc='upper left')
+            plt.show()
+            self.model.save(self.model_name)
+        f = open(self.directory + "history.pkl", "wb")
+        pickle.dump(self.history, f, -1)
+        f.close()
+
+    def advance_converter(self, j):
+        print("@advanceConverter")
+        orray = np.ones([48, 1]) * -1
+        i = 0
+        print("Len of Set ", len(set(j)))
+        print("Set ", set(j))
+        while (i < len(j)):
+            krray = np.ones([48, 1]) * -1
+
+            if j[i] == 0 or j[i] == 1:
+                pass
+            elif j[i] == 2:
+                if i + 1 < len(j) and j[i + 1] - 2 - 1 - 1 < 288:
+                    maxv = 0
+                    v = 0
+                    q = 1
+                    while i + q < len(j) and j[i + q] > 3:
+                        x = int(j[i + q] - (2 + 1 + 1))
+                        p = int(x / 6)
+                        v = int(x) % 6
+                        if (p < 48):
+                            # print(q,p,v,x,j[i+q]-(2+1+1))
+                            krray[p, 0] = v
+                            if maxv < v:
+                                maxv = v
+                        q += 1
+
+                    orray = np.append(orray, krray, axis=1)
+                    for ta in range(0, (2 ** maxv) - 1):
+                        krray = np.ones([48, 1]) * -1
+                        orray = np.append(orray, krray, axis=1)
+
+                elif i + 1 < len(j) and j[i + 1] >= 288 + 2 + 1 + 1:
+                    x = j[i + 1] - 287 - 2 - 1 - 1
+                    for z in range(x):
+                        orray = np.append(orray, krray, axis=1)
+            i += 1
+
+        print("@Converter Entered data into orray")
+        print("@Converter Now Saving orray")
+        np.save("generated.npy", orray)
+        print("stored successfully")
+
+    def converter(self, j):
+        print("@Converter")
+        orray = np.ones([48, 1]) * -1
+        # print(j)
+        for i in range(len(j)):
+            krray = np.ones([48, 1]) * -1
+            if i % 1000 == 0:
+                print(i, len(j))
+            if j[i] < 288 + 2 and j[i] > 1:
+                x = int(j[i]) - 2
+                p = int(x / 6)
+                v = int(x) % 6
+                krray[p, 0] = v
+
+                orray = np.append(orray, krray, axis=1)
+                for ta in range(0, (2 ** v) - 1):
+                    krray = np.ones([48, 1]) * -1
+                    orray = np.append(orray, krray, axis=1)
+            else:  # for adding rest rows to the melody
+                x = j[i] - 287 - 2
+                for z in range(x):
+                    orray = np.append(orray, krray, axis=1)
+                    # print("orray shape", orray.shape)
+        print("@Converter Entered data into orray")
+        print("@Converter Now Saving orray")
+        np.save("drive/My Drive/DataProject/generated.npy", orray)
+        print("stored successfully")
+
+    def on_epoch_end(self, epoch_end, x):
+        self.epochs_ran += 1
+        print("@on_epoch_end saving model to disk")
+        self.model.save(self.model_name)
+
+    def load_saved(self, savefile="chordload.pkl", option=0, google_drive=False):
         """
         This loads the npy data in the folder saved and use it
         train the
         :return:
         """
-        """
-        for r in range(10):
-            while True:
-                ch = np.random.randint(0, len(list_offiles))
-                if list_offiles[ch][-4:] == ".npy":
-                    choosen_files.append(list_offiles[ch])
-                    break
-        """
-        directory = "large_save/"
-        # print("Random Done")
-        # for saved in choosen_files:
-        for saved in os.listdir(directory):
-            if saved[-4:] == ".npy" or saved[-4:] == ".npz":
-                print("Saved", saved)
-                sample = np.load(directory + saved)
-                self.input_data_to_model(sample["arr_0"])
-                # self.musicdataset.append(sample)
-        inp, out = self.melody_to_datasetver2()
-        #print(inp.shape)
-        #print("Got input output from melody_to_dataset")
-        #print("Printing Input Shape", inp.shape)
-        #print("Starting Training")
-        #self.train(inp, out)
-        self.train2(inp,out)
+
+        if not google_drive:
+            high_npy_path = "high_npy/"
+
+        else:
+            high_npy_path = "drive/My Drive/DataProject/high_npy/"
+
+        savefilename = savefile
+
+        defaultoption = False
+        if option == 1:
+            list_of_files = os.listdir(".")
+            if savefilename in list_of_files:
+                defaultoption = False
+            else:
+                defaultoption = True
+        else:
+            defaultoption = True
+
+        if defaultoption:
+            list_of_files = os.listdir(high_npy_path)
+            total_files = len(list_of_files)
+            index = -1
+            for saved in list_of_files:
+                index += 1
+                if saved[-4:] == ".npy" or saved[-4:] == ".npz":
+                    print(index, "/", total_files)
+                    sample = np.load(high_npy_path + saved)
+                    # print(sample["arr_0"])
+                    self.input_data_to_model(sample["arr_0"])
+
+            self.inp, self.out = self.melody_to_datasetver3()
+            forwrite = [self.inp, self.out, self.musicdataset]
+            f = open(self.directory + savefilename, "wb")
+            pickle.dump(forwrite, f, -1)
+            f.close()
+            # self.train2()
+        else:
+            f = open(self.directory + savefilename, "rb")
+            forwrite = pickle.load(f)
+            f.close()
+            print(len(forwrite))
+            self.inp, self.out, self.musicdataset = forwrite
+
+            print("Inp,Out loaded from pickle on disk")
+            print("Inp size: ", len(self.inp))
+            print("Out size:", len(self.out))
+            # self.train2()
 
     def generate_tune(self):
         try:
-            self.model = load_model(self.model_name)
-            print(self.model.summary())
-            print("Model loaded from disk")
+            if self.loaded_model != self.model_name:
+                self.model = load_model(self.model_name)
+                self.loaded_model = self.model_name
+                print(self.model.summary())
+                print("Model loaded from disk")
+            else:
+                self.build_model()
+                print("Already loaded")
         except Exception:
             print("Error in loading model")
         sample = np.load("temp.npy")
+        print(sample.shape)
+        print("Input_data_to_model")
         self.input_data_to_model(sample)
+
+        self.melody = self.melody[0]
+
         self.melody.pop(-1)
         while len(self.melody) < self.input_length:
             self.melody.extend(self.melody[1:])
+
         print("Length:", len(self.melody))
         original_length = len(self.melody)
         print(original_length, self.input_length)
 
         input = []
         output = []
-        for i in range(0, len(self.melody) - self.input_length, self.input_length):
+        inm = []
+        ino = []
+        for i in range(0, len(self.melody) - self.input_length, 1):
             ip = []
+            ipm = []
             # print(i, len(self.melody) - self.input_length, step)
             for q in self.melody[i:i + self.input_length]:
                 o = np.zeros(self.notes_classes)
                 o[int(q)] = 1
                 ip.append(o)
+                ipm.append(q)
             input.append(ip)
+            inm.append(ipm)
             jp = []
+            jpm = []
             for q in self.melody[i + 1:i + 1 + self.input_length]:
                 o = np.zeros(self.notes_classes)
                 o[int(q)] = 1
                 jp.append(o)
+                jpm.append(q)
             output.append(jp)
-
+            ino.append(jpm)
+        print("inm", "ino")
+        print(inm)
+        print(ino)
         print("Going to Predict")
         x = list(input[0])
         y = list(output[0])
-        input = [x]*7
-        output = [y]*7
+        # print(x)
+        # print(y)
+        # input = [x] * 7
+        # output = [y] * 7
+        ui = np.array(input).shape
+        print("Ui shape", ui)
+        print(self.model.summary())
+        generated = inm[0]
+        initial = generated[-self.input_length:]
+        e = 0
+        while e < self.input_length:
+            e += 1
+            # j = np.array([generated[-self.input_length:]])
+            ip = []
+            j = generated[-self.input_length:]
+            # for i in range(int(self.input_length / 2)):
+            #     r = np.random.randint(self.input_length)
+            #     j[r] = np.random.randint(4, 288)
+            #     j[r] = initial[r]
+            input = []
 
-        prediction = self.model.predict(np.array(input))
-        generated = []
-        for measure in prediction:
-            for row in measure:
-                generated.append(int(np.argmax(row)))
+            for q in j:
+                o = np.zeros(self.notes_classes)
+                o[int(q)] = 1
+                ip.append(o)
+                # ipm.append(q)
+            input.append(ip)
+            prediction = self.model.predict(np.array(input))
+            p = []
+            for piece in prediction:
+                for r in piece:
+                    p.append(int(np.argmax(r)))
+            generated.append(p[-1])
+
+        if len(inm[0]) - self.input_length > 0:
+            t = []
+            t.extend(inm[0][:len(inm[0]) - self.input_length])
+            t.extend(generated)
+            generated = t
+        print("generated")
+        print(self.melody)
         print(generated)
-        self.converter(generated)
+        self.advance_converter(generated)
 
     def generate_tune1(self):
         try:
             self.model = load_model(self.model_name)
             print("Model loaded from disk")
         except Exception:
+            self.build_model()
             print("Error in loading model")
         sample = np.load("temp.npy")
         self.input_data_to_model(sample)
@@ -660,32 +654,35 @@ class Melody:
         self.converter(self.melody)
 
     def use_model(self):
-        try:
-            self.model = load_model(self.model_name)
-            print("Input_Sequence_length")
-            print(dir(self.model))
-            print(self.model._feed_input_shapes)
-            # print(self.model.input_sequence_length)
-            print("Model loaded from disk")
-        except Exception:
-            print(traceback.print_exc())
+        # try:
+        # self.model = load_model(self.model_name)
+        # print("Model loaded from disk")
+        # pass
+        # except Exception:
+        # print("Error")
 
-        sample = np.load("temp.npy")
-        print("sample.shape", sample.shape)
-        self.input_data_to_model(sample)
-        x, y = self.melody_to_dataset(option=1)
-        print(x.shape)
-        try:
-            prediction = self.model.predict(x)
-            generated = []
-            for measure in prediction:
-                for row in measure:
-                    generated.append(np.argmax(row))
-            # print(generated)
-            print("Length of Generated", generated)
-            self.converter(generated)
-        except(Exception):
-            print("Error", x.shape)
+        # sample = np.load("temp.npy")
+        # self.input_data_to_model(sample)
+        # x, y = self.melody_to_dataset(option=1)
+        # print(x.shape)
+        # print(x)
+        selected = self.inp[np.random.randint(len(self.inp))]
+        ip = []
+        for q in selected:
+            o = np.zeros(323 + 1 + 1)
+            o[int(q)] = 1
+            ip.append(o)
+        # print("IpLen",len(ip))
+        ip = np.array([ip])
+        print("Ip Shape", ip.shape)
+        prediction = self.model.predict(ip)
+        generated = []
+        for measure in prediction:
+            for row in measure:
+                generated.append(np.argmax(row))
+        print("Set of Generated", set(generated))
+        print("Length of Generated", generated)
+        self.advance_converter(generated)
 
     def test_model(self, npy):
         try:
@@ -704,10 +701,270 @@ class Melody:
         self.converter(generated)
 
 
+class DifferenceMelody(Melody):
+
+    def __init__(self, name, input_length, hidden_size=256, epochs=10):
+        Melody.__init__(self, name, input_length, hidden_size, epochs)
+        self.notes_classes = 87
+
+    def encode_track(self, nparray):
+        """Receives a array of shape (48,)"""
+
+        def get_top_index(quant_notes):
+            for i in range(len(quantum_notes)):
+                if quantum_notes[i] >= 0:
+                    return i
+            return -1
+
+        starting = True
+        startnote = None
+        encoded = [0]
+        rest = 0
+
+        for quantum in range(nparray.shape[1]):
+            quantum_notes = nparray[:, quantum]
+
+            if len(np.nonzero(quantum_notes + 1)[0]) > 0:
+                if starting:
+                    i = get_top_index(quantum_notes)
+                    if i > -1:
+                        starting = False
+                        print(starting, (not starting))
+                        startnote = i
+                        time_quantum = quantum_notes[i]
+                        curnote = 24
+                        encoded.extend([curnote + 7, time_quantum + 1])  # 24 is the starting sequence for all songs
+
+                if not starting:
+                    i = get_top_index(quantum_notes)
+                    if i > -1:
+                        if rest > 0:
+                            if rest > 32:
+                                rest = 32
+                            encoded.append(54 + rest)
+                            rest = 0
+                        # note is lower than startnote then curnote is high
+                        # note is higher than startnote then curnote is low
+                        time_quantum = quantum_notes[i]
+                        curnote = 24 + startnote - i
+                        if 0 <= curnote <= 47:
+                            encoded.extend([curnote + 7, time_quantum + 1])
+
+
+            elif not starting:
+                rest += 1
+
+        print(encoded)
+        return encoded
+
+    def decode_track(self, encoded):
+
+        decoded = []
+        orray = np.ones((48, 1)) * -1
+        print(orray.shape)
+        print(encoded)
+        for i in range(len(encoded)):
+
+            x = encoded[i]
+            if x == 0:
+                pass
+
+            elif 7 <= x <= 54:
+                x = x - 24 - 7
+                if i + 1 < len(encoded):
+                    t = encoded[i + 1]
+                    if 1 <= t <= 6:
+                        print("Here")
+                        array = np.ones((48, 1)) * -1
+                        if 26-x < 48:
+                            array[26-x] = t - 1
+                            orray = np.append(orray, array,axis=1)
+            elif 55 <= x <= 86:
+                x = x - 54
+                array = np.ones((48, x))*-1
+                orray = np.append(orray, array,axis=1)
+        np.save("generated.npy",orray)
+        print(orray)
+        return orray
+
+    def input_data_to_model(self, nparray):
+        # 0 for starting music piece
+        # 1-6 for time of note
+        # 7-54 for notes
+        # 55-86 for rest notes
+        temp = self.encode_track(nparray)
+        self.melody.append(temp)
+
+    def new_generator(self):
+        try:
+            if self.loaded_model != self.model_name:
+                self.model = load_model(self.model_name)
+                self.loaded_model = self.model_name
+                print(self.model.summary())
+                print("Model loaded from disk")
+            else:
+                self.build_model()
+                print("Already loaded")
+
+        except Exception:
+            print("Error in loading model")
+
+        sample = np.load("temp.npy")
+        print(sample.shape)
+        print("Input_data_to_model")
+        self.input_data_to_model(sample)
+        self.melody = self.melody[0]
+
+        while len(self.melody) < self.input_length:
+            self.melody.extend(self.melody)
+
+        input = []
+        output = []
+        inm = []
+        ino = []
+
+        for i in range(0, len(self.melody) - self.input_length, 1):
+            ip = []
+            ipm = []
+            # print(i, len(self.melody) - self.input_length, step)
+            for q in self.melody[i:i + self.input_length]:
+                o = np.zeros(self.notes_classes)
+                o[int(q)] = 1
+                ip.append(o)
+                ipm.append(q)
+            input.append(ip)
+            inm.append(ipm)
+            jp = []
+            jpm = []
+            for q in self.melody[i + 1:i + 1 + self.input_length]:
+                o = np.zeros(self.notes_classes)
+                o[int(q)] = 1
+                jp.append(o)
+                jpm.append(q)
+            output.append(jp)
+            ino.append(jpm)
+
+            x = list(input[0])
+            y = list(output[0])
+
+            prediction = self.model.predict(np.array([x]))
+            p = []
+            for piece in prediction:
+                for r in piece:
+                    p.append(int(np.argmax(r)))
+
+            self.decode_track(p)
+
+
+
+    def generate_tune(self):
+        try:
+            if self.loaded_model != self.model_name:
+                self.model = load_model(self.model_name)
+                self.loaded_model = self.model_name
+                print(self.model.summary())
+                print("Model loaded from disk")
+            else:
+                self.build_model()
+                print("Already loaded")
+
+        except Exception:
+            print("Error in loading model")
+
+        sample = np.load("temp.npy")
+        print(sample.shape)
+        print("Input_data_to_model")
+        self.input_data_to_model(sample)
+
+        self.melody = self.melody[0]
+
+        # self.melody.pop(-1)
+        while len(self.melody) < self.input_length:
+            self.melody.extend(self.melody[1:])
+
+        print("Length:", len(self.melody))
+        original_length = len(self.melody)
+        print(original_length, self.input_length)
+
+        input = []
+        output = []
+        inm = []
+        ino = []
+        for i in range(0, len(self.melody) - self.input_length, 1):
+            ip = []
+            ipm = []
+            # print(i, len(self.melody) - self.input_length, step)
+            for q in self.melody[i:i + self.input_length]:
+                o = np.zeros(self.notes_classes)
+                o[int(q)] = 1
+                ip.append(o)
+                ipm.append(q)
+            input.append(ip)
+            inm.append(ipm)
+            jp = []
+            jpm = []
+            for q in self.melody[i + 1:i + 1 + self.input_length]:
+                o = np.zeros(self.notes_classes)
+                o[int(q)] = 1
+                jp.append(o)
+                jpm.append(q)
+            output.append(jp)
+            ino.append(jpm)
+        print("inm", "ino")
+        print(inm)
+        print(ino)
+        print("Going to Predict")
+        x = list(input[0])
+        y = list(output[0])
+        # print(x)
+        # print(y)
+        # input = [x] * 7
+        # output = [y] * 7
+        ui = np.array(input).shape
+        print("Ui shape", ui)
+        print(self.model.summary())
+        generated = inm[0]
+        initial = generated[-self.input_length:]
+        e = 0
+        while e < self.input_length:
+            e += 1
+            # j = np.array([generated[-self.input_length:]])
+            ip = []
+            j = generated[-self.input_length:]
+            # for i in range(int(self.input_length / 2)):
+            #     r = np.random.randint(self.input_length)
+            #     j[r] = np.random.randint(4, 288)
+            #     j[r] = initial[r]
+            input = []
+
+            for q in j:
+                o = np.zeros(self.notes_classes)
+                o[int(q)] = 1
+                ip.append(o)
+                # ipm.append(q)
+            input.append(ip)
+            prediction = self.model.predict(np.array(input))
+            p = []
+            for piece in prediction:
+                for r in piece:
+                    p.append(int(np.argmax(r)))
+            generated.append(p[-1])
+
+        if len(inm[0]) - self.input_length > 0:
+            t = []
+            t.extend(inm[0][:len(inm[0]) - self.input_length])
+            t.extend(generated)
+            generated = t
+        generated = self.decode_track(generated)
+        print("generated")
+        print(self.melody)
+        print(generated)
+        # self.advance_converter(generated)
+
+
 if __name__ == '__main__':
-    # data = np.load('train_data.npy')
-    AI = Melody("modelA.h5", 3)
-    AI.load_saved()
-    # AI.test_model()
-    # print(dir(AI))
-    # AI.input_data_to_model(data)
+    JI = DifferenceMelody("models/" + "master2.h5", hidden_size=256, input_length=25, epochs=6)
+    # sample = np.load("./high_npy/Rites-Of-Spring.02192.npz")
+    # JI.input_data_to_model(sample["arr_0"])
+    g = [0, 31, 3.0, 31, 3.0, 57, 33, 3.0, 57, 36, 3.0, 61, 33, 3.0, 57, 34, 3.0, 57, 33, 3.0, 57, 31, 3.0, 61, 31, 3.0, 57, 33, 3.0, 57, 36, 3.0, 61, 33, 3.0, 57, 34, 3.0, 57, 31, 3.0, 57, 33, 3.0, 61, 31, 3.0, 57, 36, 3.0, 57, 38, 3.0, 61, 36, 3.0, 57, 31, 3.0, 61, 36, 3.0, 57, 38, 3.0, 57, 36, 3.0, 57, 31, 3.0, 61, 26, 3.0, 57, 31, 3.0, 57, 36, 3.0, 57, 31, 3.0, 57, 34, 3.0, 57, 36, 3.0, 57, 34, 3.0, 57, 38, 3.0, 57, 34, 3.0, 57, 40, 3.0, 57, 34, 3.0]
+    JI.decode_track(g)

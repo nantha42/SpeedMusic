@@ -25,7 +25,6 @@ class ChangeModelPanel:
             temp = NameBox(self.models_list[i][0], i)
             temp.rect.topleft = (10, i * 30 + 4)
             self.spritebox_models.append(temp)
-
         self.__predraw()
 
     def __predraw(self):
@@ -56,7 +55,7 @@ class ChangeModelPanel:
             self.requests.append("close")
             self.result = [id]
 
-        print("Change_Model_panel",x,y,selected_some)
+        # print("Change_Model_panel",x,y,selected_some)
 
 
 

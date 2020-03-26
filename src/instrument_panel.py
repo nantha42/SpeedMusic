@@ -35,12 +35,12 @@ class InstrumentPanel:
             self.instruments_sprites.append(Instrument(self.instruments_used[i],
                                                        i,
                                                        all_instruments[self.instruments_used[i]]))
-            print(all_instruments[i], " Builded")
+            # print(all_instruments[i], " Builded")
 
     def add_instrument(self, programno):
         all_instruments = self.read_instrumentslist()
         programname = all_instruments[programno]
-        print("Read from all_instruments", programname)
+        # print("Read from all_instruments", programname)
 
         self.instruments_used.append(programno)
         self.instruments_sprites.append(Instrument(programno,
@@ -66,7 +66,7 @@ class InstrumentPanel:
             self.surface_panel.blit(self.instruments_sprites[i].image, self.instruments_sprites[i].rect)
 
     def draw(self):
-        print("Drawn state delete:",self.state["delete"])
+        # print("Drawn state delete:",self.state["delete"])
         self.predraw()
 
     def read_instrumentslist(self):
@@ -86,7 +86,7 @@ class InstrumentPanel:
         """Handles the mouse click made on the
         instrument panel surface"""
         x, y = pos
-        print(x, y)
+        # print(x, y)
 
         # checks if any instrument is clicked
         instrument_clicked = False
@@ -101,7 +101,7 @@ class InstrumentPanel:
                 break
         if self.state["delete"]:
             if not instrument_clicked:
-                print("outclick")
+                # print("outclick")
                 self.state["delete"] = False
                 self.predraw()
 
@@ -113,7 +113,7 @@ class InstrumentPanel:
             self.state["delete"] = True
             pass
         # delete box
-        print("Handled by Instrument panel")
+        # print("Handled by Instrument panel")
 
     def __handle_response(self, response):
         if 'program' in response.keys():

@@ -75,8 +75,8 @@ class Pianoroll:
                 notes_pos = np.nonzero(note_track)
                 f = 3
                 for pos in notes_pos[0]:
-                    print("Error", f * pos, f * pos + self.dura_to_timecell(note_track[pos] - 1),
-                          self.dura_to_timecell(note_track[pos] - 1))
+                    # print("Error", f * pos, f * pos + self.dura_to_timecell(note_track[pos] - 1),
+                    #       self.dura_to_timecell(note_track[pos] - 1))
                     pianoroll[f * pos:f * pos + self.dura_to_timecell(note_track[pos] - 1) + 1, 83 - i] = 90
             pianorolls.append(pianoroll)
 

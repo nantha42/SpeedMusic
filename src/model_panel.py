@@ -6,7 +6,7 @@ from font import *
 import pygame as py
 
 
-class ModelPanel(pygame.sprite.Sprite):
+class ModelPanelListener(pygame.sprite.Sprite):
     def __init__(self,):
         pygame.sprite.Sprite.__init__(self)
         self.models_available = []
@@ -22,7 +22,7 @@ class ModelPanel(pygame.sprite.Sprite):
     def __initiate(self):
         jfile = open("./models/info.json")
         f = json.load(jfile)
-
+        self.models_available = []
         for obj in f:
             self.models_available.append([[x,y] for x,y in obj.items()][0])
 
@@ -39,7 +39,7 @@ class ModelPanel(pygame.sprite.Sprite):
         self.image.blit(surf,(5,5))
 
     def handle_events(self, pos):
-        print("Event Handled")
+        # print("Event Handled")
         if self.opened == False:
             self.requests.append("open")
         else:
@@ -52,13 +52,10 @@ class ModelPanel(pygame.sprite.Sprite):
         self.image.blit(surf, (5, 5))
 
     def get_models_list(self):
+        self.__initiate()
         return self.models_available
 
     def get_model_detail(self):
         print(self.models_available[self.selected_model_index])
         return self.models_available[self.selected_model_index]
-
-
-
-
 

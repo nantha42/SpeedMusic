@@ -10,7 +10,7 @@ class NameBox(py.sprite.Sprite):
         py.sprite.Sprite.__init__(self)
         self.image = py.Surface((140, 20))
         self.rect = self.image.get_rect()
-        print(type(self.rect))
+        # print(type(self.rect))
         self.name = name
         self.id = id
         self.__predraw()
@@ -143,15 +143,15 @@ class AddInstrumentPanel:
             if id != -1:
                 ins = self.__read_instrumentslist()
                 self.instruments_for_itypes = ins[id * 8:id * 8 + 8]
-                print(self.instruments_for_itypes)
+                # print(self.instruments_for_itypes)
                 self.spritebox_itypeitems = []
-                print("Length", len(self.instruments_for_itypes))
+                # print("Length", len(self.instruments_for_itypes))
                 for i in range(len(self.instruments_for_itypes)):
                     temp = NameBox(self.instruments_for_itypes[i][:-1], i)
                     temp.rect.topleft = (10, i * 30 + 4)
                     self.spritebox_itypeitems.append(temp)
 
-                print("Spritebox_itypeitems", self.spritebox_itypeitems)
+                # print("Spritebox_itypeitems", self.spritebox_itypeitems)
 
         elif x > 270 and x < 270 + self.typeitems_width and y > 20 and y < 20 + self.typeitems_height:
             x = x - 270

@@ -1,8 +1,57 @@
 [
-	{"modelA":256},
-	{"modelmonger":512},
-	{"modelJ":512},
-	{"modelK":512},
-	{"master": 1024},
-	{"master1": 1024}
+  {
+    "diffmod128v2": 128
+  },
+  {
+    "diffmod128v1": 128
+  },
+  {
+    "diffmod128": 128
+  },
+  {
+    "diffmod1": 75
+  },
+  {
+    "25_model": 25
+  },
+
+  {
+    "atom": 5
+  },
+  {
+    "mark4": 400
+  },
+  {
+    "mark2": 400
+  },
+  {
+    "mark3": 400
+  },
+  {
+    "complexmaster": 1024
+  },
+  {
+    "master4": 1024
+  },
+  {
+    "modelA": 256
+  },
+  {
+    "modelmonger": 512
+  },
+  {
+    "modelJ": 512
+  },
+  {
+    "modelK": 512
+  },
+  {
+    "master": 1024
+  },
+  {
+    "master1": 1024
+  },
+  {
+    "master2": 1024
+  }
 ]

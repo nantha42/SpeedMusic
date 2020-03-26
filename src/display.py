@@ -7,12 +7,15 @@ from instrument_panel import *
 import time
 from add_instruments_panel import *
 from model_panel import *
-from change_model_panel import  *
+from change_model_panel import *
+from file_panel import *
+
 
 class Display:
 
     def __init__(self, mes, file="", inp_length=256):
         py.display.init()
+
         self.width = 1000
         self.height = 800
         self.win = py.display.set_mode((self.width, self.height))
@@ -26,10 +29,13 @@ class Display:
                          "move_piano_roll_right": False, "playing": False, "show_map": False, "microplay": False}
         self.events = {"update_pianoroll": True}
         self.event_handled = True
+        self.rem_tok_for_generation = str(10000)
         self.quit = False
         self.window = None
         self.instrument_panel = InstrumentPanel()
-        self.model_panel = ModelPanel()
+        self.model_panel = ModelPanelListener()
+        self.file_panel = FilePanelListener()
+        self.jarv = None
         self.loaded_model = None
         self.openfile = False
         self.input_length = inp_length
@@ -53,6 +59,8 @@ class Display:
         self.image_loc = "../images/"
         self.button_play = py.image.load(self.image_loc + "play.png")
         self.button_pause = py.image.load(self.image_loc + "pause.png")
+        self.button_file = py.image.load(self.image_loc + "file.png")
+        self.button_save = py.image.load(self.image_loc + "save.png")
         self.button_note = py.image.load(self.image_loc + str(
             2 ** self.pianoroll.controls["nthnote"]) + "_on.png")
         self.button_addm = py.image.load(self.image_loc + "add_m.png")
@@ -91,7 +99,7 @@ class Display:
             time_start = self.pianoroll.controls["time_start"]
             ratio = self.pianoroll.controls["tempo"] / 60
             time_measures = ((time.time() - time_start) * ratio) / (4)
-            print("time_measures", time_measures)
+            # print("time_measures", time_measures)
             if time_measures > self.pianoroll.controls["measure_passed"]:
                 self.pianoroll.controls["measure_passed"] = time_measures
                 self.pianoroll.controls["timebar"] = -self.pianoroll.controls["measure_passed"] * 640 * \
@@ -110,7 +118,15 @@ class Display:
         self.win.blit(self.symbol_measure, (550, 30))
         self.win.blit(self.button_addm, (580, 30))
         self.win.blit(self.button_subm, (580, 46))
-        self.win.blit(self.model_panel.image, (620, 30))
+        self.win.blit(self.button_file, (30, 30))
+        self.win.blit(self.button_save, (70, 30))
+        self.win.blit(self.model_panel.image, (620, 45))
+        font = Font(14)
+        # print()
+
+        surf, rec = font.text_object(self.rem_tok_for_generation)
+        self.win.blit(surf, (670, 30))
+        # self.image.blit(surf, (5, 5))
 
         if self.controls["move_piano_roll_left"] or self.controls["move_piano_roll_right"]:
             self.pianoroll.controls["make_velocity_0"] = False
@@ -162,7 +178,7 @@ class Display:
                 self.event_handled = True
                 self.events["update_pianoroll"] = True
                 x, y = py.mouse.get_pos()
-                print(x, y)
+                # print(x, y)
 
                 if self.window is not None:
                     if (100 < x < (100 + self.window.width)) and (100 < y < (100 + self.window.height)):
@@ -185,6 +201,7 @@ class Display:
                     k = int(k / 10)
                     self.pianoroll.enternote(s, k)
                     self.play(1)
+                    self.token_generator()
 
                 if x >= 580 and x <= 596 and y >= 30 and y <= 62:
                     if y >= 30 and y <= 46:
@@ -235,16 +252,22 @@ class Display:
                 if event.key == py.K_g:
                     np.save("temp.npy", self.pianoroll.notes[self.pianoroll.selected_track])
                     print("Saved Temp")
-                    self.model_name,self.input_length = self.model_panel.get_model_detail()
-                    jarv = Melody("models/"+self.model_name+".h5")
-
-                    jarv.input_length = self.input_length
+                    self.model_name, self.input_length = self.model_panel.get_model_detail()
+                    # jarv = Melody("models/" + self.model_name + ".h5")
+                    # jarv.input_length = self.input_length
                     # jarv.use_model()
-                    jarv.generate_tune()
+                    # jarv.generate_tune()
+                    if self.jarv == None or self.loaded_model!=self.model_name:
+                        self.jarv = DifferenceMelody("models/" + self.model_name + ".h5",input_length=self.input_length)
+
+                        # self.jarv.generate_tune()
+                        self.jarv.new_generator()
+
+
 
                 if event.key == py.K_f:
                     np.save("temp.npy", self.pianoroll.notes[self.pianoroll.selected_track])
-                    print("Saved Temp")
+                    # print("Saved Temp")
                     jarv = Melody(self.model_name)
                     print(jarv.model.summary())
                     jarv.input_length = self.input_length
@@ -284,7 +307,7 @@ class Display:
 
                 if event.key == py.K_q:
                     np.save('train_data.npy', self.pianoroll.notes)
-                    print("Saved Successfully")
+                    # print("Saved Successfully")
 
                 if event.key == py.K_s:
                     np.save("saved_advance/" + str(int(time.time())), self.pianoroll.notes)
@@ -322,7 +345,7 @@ class Display:
                     self.controls["move_piano_roll_right"] = True
 
                 if event.key == py.K_RSHIFT:
-                    print("shift pressed")
+                    # print("shift pressed")
                     self.pianoroll.controls["fast_move_piano_roll"] = True
 
                 if event.key == py.K_SPACE:
@@ -345,32 +368,42 @@ class Display:
                 self.controls["play"] = False
                 self.controls["playing"] = False
                 self.controls["microplay"] = False
-                print("Stopping Music")
+                # print("Stopping Music")
                 py.mixer.music.stop()
 
     def load_from_npy(self, file):
         array = np.load(file)
-        print("Array Shape", array.shape)
+
+        try:
+            array = array["arr_0"]
+        except Exception:
+            pass
+        # print("Array Shape", array.shape)
         self.pianoroll.notes[self.pianoroll.selected_track] = array
         self.pianoroll.notes_index[self.pianoroll.selected_track] = []
         ind = 0
         for _notes in self.pianoroll.notes:
             note_index = []
-            print("Before Error", _notes, _notes.shape)
+            # print("Before Error", _notes, _notes.shape)
 
             for i in range(_notes.shape[1]):
                 row = _notes[:, i]
                 for v in range(len(row)):
                     if row[v] != -1:
                         note_index.append([v, i])
-                        break
-            print(len(note_index))
+
+            # print(len(note_index))
             self.pianoroll.notes_index[ind] = note_index
             ind += 1
+        if array.shape[0] < self.measure_limit:
+            diff = self.measure_limit - array.shape[1]
+            while diff > 0:
+                np.append(self.pianoroll.notes[self.pianoroll.selected_track],np.ones((48))*-1)
+                diff-=1
 
-        print("Note_indexs", self.pianoroll.notes_index[self.pianoroll.selected_track])
-        print("notes_index", self.pianoroll.notes_index)
-        print("Successfully Loaded")
+        # print("Note_indexs", self.pianoroll.notes_index[self.pianoroll.selected_track])
+        # print("notes_index", self.pianoroll.notes_index)
+        # print("Successfully Loaded")
 
     def play(self, option=0):
         if option == 0 and not self.controls["microplay"]:
@@ -386,7 +419,7 @@ class Display:
                 self.controls["playing"] = False
                 py.mixer.music.stop()
         else:
-            print("State", self.controls["play"], self.controls["playing"])
+
             if self.controls["play"] == False and self.controls["playing"] == False and not self.controls["microplay"]:
                 py.mixer.music.load("play_note.mid")
                 py.mixer.music.set_endevent(py.USEREVENT)
@@ -438,7 +471,7 @@ class Display:
                     prestart = int(nonzeros[i])
                     start = prestart
                 pass
-            print("Notes", notes)
+            # print("Notes", notes)
             return notes
         else:
             return []
@@ -465,7 +498,7 @@ class Display:
         for each_note_row in shortened_track:
             n = each_note_row[0]
             ranges = np.array(each_note_row[1])
-            print(ranges.shape)
+            # print(ranges.shape)
             ranges[:, 0] = ranges[:, 0] / 3
             modified_track.append([n, ranges])
         return modified_track
@@ -486,7 +519,7 @@ class Display:
                 elif type(req) == type({}):
                     if "clicked" in req.keys():
                         instrument_selected = req["clicked"]
-                        print("PProgramno", instrument_selected)
+                        # print("PProgramno", instrument_selected)
                         # self.pianoroll.add_track(instrument_selected)
                         self.pianoroll.selected_track = instrument_selected
                         self.events["update_pianoroll"] = True
@@ -528,31 +561,71 @@ class Display:
                                 self.instrument_panel.update()
 
         if len(self.model_panel.requests) > 0:
-            print("@Request")
-            print(self.window)
+            # print("@Request")
+            # print(self.window)
             if self.window is None:
                 req = self.model_panel.requests.pop(0)
 
                 if req == "open":
                     self.window = ChangeModelPanel(self.model_panel.get_models_list())
 
-
+        if len(self.file_panel.requests) > 0:
+            pass
 
         if self.window != None:
             if len(self.window.requests) > 0:
                 req = self.window.requests.pop(0)
                 if req == "close":
                     # Get the value returned from the window
-                    if isinstance(self.window,AddInstrumentPanel):
+                    if isinstance(self.window, AddInstrumentPanel):
                         self.instrument_panel.add_instrument(self.window.result)
                         self.pianoroll.add_track(self.window.result)
                         self.controls["update_ipanel"] = True
                         self.window = None
-                    elif isinstance(self.window,ChangeModelPanel):
+                    elif isinstance(self.window, ChangeModelPanel):
                         self.model_panel.selected_model_index = self.window.result[0]
                         self.model_panel.update()
                         self.window = None
                         self.controls["update_ipanel"] = True
+
+    def token_generator(self):
+
+        # 0 for starting music piece
+        # 1 for ending sequence
+        # 2 for start of a chord
+        # 3 for filling chord that are empty with keys
+        # every single note is chord
+        nparray = self.pianoroll.notes[self.pianoroll.selected_track]
+        temp = [0]
+        rest = 0
+        for i in range(np.min([32 * 80, nparray.shape[1]])):
+            row = nparray[:, i]
+            notefound = False
+            args = np.nonzero(row + 1)[0]
+
+            if len(args) > 0:
+                if rest > 0:
+                    n32rests = int(rest / 32)
+                    remrest = rest % 32
+                    temp.extend([2, 2 + 1 + 1 + 287 + 32] * n32rests)
+                    temp.extend([2, 2 + 1 + 1 + 287 + remrest])
+
+                rest = 0
+                temp.append(2)
+                if len(args) >= 5:
+
+                    for v in args[:5]:
+                        temp.append(2 + 1 + 1 + v * 6 + row[v])
+                else:
+                    for v in args:
+                        temp.append(2 + 1 + 1 + v * 6 + row[v])
+            else:
+                rest += 1
+        temp.append(1)
+        _, self.input_length = self.model_panel.models_available[self.model_panel.selected_model_index]
+        self.rem_tok_for_generation = str(self.input_length - len(temp))
+
+
 
     def run(self):
         while not self.quit:
@@ -560,11 +633,17 @@ class Display:
             self.event_handler()
             self.play()
             self.request_handler()
+
         # print(self.pianoroll.notes)
 
+def open_mid_randomly():
+    mids = os.listdir("data/")
+    mid = mids[np.random.randint(len(mids))]
+    return mid
 
 if __name__ == '__main__':
-    file = "data/again.mid"
+
+    file = "data/"+open_mid_randomly()
     if len(sys.argv) == 2:
         file = sys.argv[1]
     d = Display(mes=80, inp_length=1024, file=file)
