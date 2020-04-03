@@ -1,17 +1,23 @@
-from keras.optimizers import RMSprop
-from keras.models import Sequential
-from keras.layers import LSTM
-from keras.layers import Embedding
-from keras.layers import Dropout
-from keras.layers import Dense
-from keras.layers import Activation
-from keras.models import load_model
-from keras.layers import BatchNormalization as BatchNorm
+from tensorflow.keras.optimizers import RMSprop
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import LSTM
+from tensorflow.keras.layers import Embedding
+from tensorflow.keras.layers import Dropout
+from tensorflow.keras.layers import Dense
+from tensorflow.keras.layers import Activation
+from tensorflow.keras.models import load_model
+from tensorflow.keras.layers import BatchNormalization as BatchNorm
 import matplotlib.pyplot as plt
 
-from keras.callbacks import LambdaCallback
-from keras.utils import Sequence
-import keras.metrics as metrics
+
+from tensorflow.keras.layers import Layer
+import tensorflow.keras.backend as K
+import tensorflow
+
+from tensorflow.keras.callbacks import LambdaCallback
+from tensorflow.keras.utils import Sequence
+import tensorflow as tf
+import tensorflow.keras.metrics as metrics
 import numpy as np
 import os
 import time
@@ -70,6 +76,37 @@ class Generator2(Sequence):
 
 
 histories = {'categorical_accuracy': [], 'val_categorical_accuracy': [], 'loss': [], 'val_loss': []}
+
+
+class attention(Layer):
+    def __init__(self, **kwargs):
+        super(attention, self).__init__(**kwargs)
+
+    def build(self, input_shape):
+        self.W = self.add_weight(name="att_weight", shape=(input_shape[-1], 1), initializer="normal")
+        self.b = self.add_weight(name="att_bias", shape=(input_shape[1], 1), initializer="zeros")
+        super(attention, self).build(input_shape)
+
+    def call(self, x):
+        print("Shape of X", x.shape)
+        res = K.tanh(K.dot(x, self.W) + self.b)
+
+        print("res shape", res.shape)
+        print("Trying to squeeze")
+        et = K.squeeze(res, axis=-1)
+        print("Squeezed")
+        at = K.softmax(et)
+        at = K.expand_dims(at, axis=-1)
+        output = x * at
+
+        print("Output shape ", output.shape)
+        return output
+
+    def compute_output_shape(self, input_shape):
+        return (input_shape[0], input_shape[-1])
+
+    def get_config(self):
+        return super(attention, self).get_config()
 
 
 class Melody:
@@ -754,15 +791,15 @@ class DifferenceMelody(Melody):
             elif not starting:
                 rest += 1
 
-        print(encoded)
+        # print(encoded)
         return encoded
 
     def decode_track(self, encoded):
 
         decoded = []
         orray = np.ones((48, 1)) * -1
-        print(orray.shape)
-        print(encoded)
+        # print(orray.shape)
+        # print(encoded)
         for i in range(len(encoded)):
 
             x = encoded[i]
@@ -774,17 +811,17 @@ class DifferenceMelody(Melody):
                 if i + 1 < len(encoded):
                     t = encoded[i + 1]
                     if 1 <= t <= 6:
-                        print("Here")
+                        # print("Here")
                         array = np.ones((48, 1)) * -1
-                        if 26-x < 48:
-                            array[26-x] = t - 1
-                            orray = np.append(orray, array,axis=1)
+                        if 26 - x < 48:
+                            array[26 - x] = t - 1
+                            orray = np.append(orray, array, axis=1)
             elif 55 <= x <= 86:
                 x = x - 54
-                array = np.ones((48, x))*-1
-                orray = np.append(orray, array,axis=1)
-        np.save("generated.npy",orray)
-        print(orray)
+                array = np.ones((48, x)) * -1
+                orray = np.append(orray, array, axis=1)
+        np.save("generated.npy", orray)
+        # print(orray)
         return orray
 
     def input_data_to_model(self, nparray):
@@ -793,37 +830,31 @@ class DifferenceMelody(Melody):
         # 7-54 for notes
         # 55-86 for rest notes
         temp = self.encode_track(nparray)
+        self.melody = []
         self.melody.append(temp)
 
-    def new_generator(self):
-        try:
-            if self.loaded_model != self.model_name:
-                self.model = load_model(self.model_name)
-                self.loaded_model = self.model_name
-                print(self.model.summary())
-                print("Model loaded from disk")
-            else:
-                self.build_model()
-                print("Already loaded")
-
-        except Exception:
-            print("Error in loading model")
+    def inf_generator(self):
+        if self.loaded_model != self.model_name:
+            print(self.model_name)
+            self.model = load_model(self.model_name,custom_objects={"attention":attention})
+            self.loaded_model = self.model_name
+            print(self.model.summary())
+            print("Model loaded from disk")
+        else:
+            self.build_model()
+            print("Already loaded")
 
         sample = np.load("temp.npy")
-        print(sample.shape)
-        print("Input_data_to_model")
         self.input_data_to_model(sample)
         self.melody = self.melody[0]
-
-        while len(self.melody) < self.input_length:
-            self.melody.extend(self.melody)
+        req_length = 500
 
         input = []
         output = []
         inm = []
         ino = []
 
-        for i in range(0, len(self.melody) - self.input_length, 1):
+        for i in range(0, len(self.melody) - self.input_length, self.input_length):
             ip = []
             ipm = []
             # print(i, len(self.melody) - self.input_length, step)
@@ -844,18 +875,84 @@ class DifferenceMelody(Melody):
             output.append(jp)
             ino.append(jpm)
 
-            x = list(input[0])
-            y = list(output[0])
+        # a,b,c,d = np.zeros((512,1)),np.zeros((512,1)),np.zeros((512,1)),np.zeros((512,1))
 
-            prediction = self.model.predict(np.array([x]))
+        a, b, c, d = np.random.normal(0,1,(1,512)),np.random.normal(0,1,(1,512)),np.random.normal(0,1,(1,512)),np.random.normal(0,1,(1,512))
+        print(a.shape)
+        p = []
+        for i in range(req_length):
+            print(i)
+            if i < len(input):
+                inp = np.array([input[i]])
+                out,a,b,c,d = self.model.predict([inp]+[a,b,c,d])
+                p.append(int(np.argmax(out[0][0])))
+                # print(out.shape)
+            else:
+                o = np.zeros(self.notes_classes)
+                o[p[-1]] = 1
+                inp = np.array([[o]])
+                out, a, b, c, d = self.model.predict([inp] + [a, b, c, d])
+                p.append(int(np.argmax(out[0][0])))
+        self.decode_track(p)
+
+    def new_generator(self):
+
+        if self.loaded_model != self.model_name:
+            print(self.model_name)
+            self.model = load_model(self.model_name,custom_objects={"attention":attention})
+            self.loaded_model = self.model_name
+            print(self.model.summary())
+            print("Model loaded from disk")
+        else:
+            self.build_model()
+            print("Already loaded")
+
+
+        sample = np.load("temp.npy")
+        print(sample.shape)
+        print("Input_data_to_model")
+        self.input_data_to_model(sample)
+        self.melody = self.melody[0]
+
+        while len(self.melody) < self.input_length:
+            self.melody.extend(self.melody)
+
+        input = []
+        output = []
+        inm = []
+        ino = []
+
+        for i in range(0, len(self.melody) - self.input_length, self.input_length):
+            ip = []
+            ipm = []
+            # print(i, len(self.melody) - self.input_length, step)
+            for q in self.melody[i:i + self.input_length]:
+                o = np.zeros(self.notes_classes)
+                o[int(q)] = 1
+                ip.append(o)
+                ipm.append(q)
+            input.append(ip)
+            inm.append(ipm)
+            jp = []
+            jpm = []
+            for q in self.melody[i + 1:i + 1 + self.input_length]:
+                o = np.zeros(self.notes_classes)
+                o[int(q)] = 1
+                jp.append(o)
+                jpm.append(q)
+            output.append(jp)
+            ino.append(jpm)
+
             p = []
-            for piece in prediction:
-                for r in piece:
-                    p.append(int(np.argmax(r)))
-
+            count = 0
+            for x in input:
+                print(count, "/", len(input))
+                prediction = self.model.predict(np.array([x]))
+                for piece in prediction:
+                    for r in piece:
+                        p.append(int(np.argmax(r)))
+                count += 1
             self.decode_track(p)
-
-
 
     def generate_tune(self):
         try:
@@ -910,10 +1007,10 @@ class DifferenceMelody(Melody):
                 jpm.append(q)
             output.append(jp)
             ino.append(jpm)
-        print("inm", "ino")
-        print(inm)
-        print(ino)
-        print("Going to Predict")
+        # print("inm", "ino")
+        # print(inm)
+        # print(ino)
+        # print("Going to Predict")
         x = list(input[0])
         y = list(output[0])
         # print(x)
@@ -957,8 +1054,8 @@ class DifferenceMelody(Melody):
             generated = t
         generated = self.decode_track(generated)
         print("generated")
-        print(self.melody)
-        print(generated)
+        # print(self.melody)
+        # print(generated)
         # self.advance_converter(generated)
 
 
@@ -966,5 +1063,11 @@ if __name__ == '__main__':
     JI = DifferenceMelody("models/" + "master2.h5", hidden_size=256, input_length=25, epochs=6)
     # sample = np.load("./high_npy/Rites-Of-Spring.02192.npz")
     # JI.input_data_to_model(sample["arr_0"])
-    g = [0, 31, 3.0, 31, 3.0, 57, 33, 3.0, 57, 36, 3.0, 61, 33, 3.0, 57, 34, 3.0, 57, 33, 3.0, 57, 31, 3.0, 61, 31, 3.0, 57, 33, 3.0, 57, 36, 3.0, 61, 33, 3.0, 57, 34, 3.0, 57, 31, 3.0, 57, 33, 3.0, 61, 31, 3.0, 57, 36, 3.0, 57, 38, 3.0, 61, 36, 3.0, 57, 31, 3.0, 61, 36, 3.0, 57, 38, 3.0, 57, 36, 3.0, 57, 31, 3.0, 61, 26, 3.0, 57, 31, 3.0, 57, 36, 3.0, 57, 31, 3.0, 57, 34, 3.0, 57, 36, 3.0, 57, 34, 3.0, 57, 38, 3.0, 57, 34, 3.0, 57, 40, 3.0, 57, 34, 3.0]
-    JI.decode_track(g)
+    # g = [0, 31, 3.0, 31, 3.0, 57, 33, 3.0, 57, 36, 3.0, 61, 33, 3.0, 57, 34, 3.0, 57, 33, 3.0, 57, 31, 3.0, 61, 31, 3.0,
+    #      57, 33, 3.0, 57, 36, 3.0, 61, 33, 3.0, 57, 34, 3.0, 57, 31, 3.0, 57, 33, 3.0, 61, 31, 3.0, 57, 36, 3.0, 57, 38,
+    #      3.0, 61, 36, 3.0, 57, 31, 3.0, 61, 36, 3.0, 57, 38, 3.0, 57, 36, 3.0, 57, 31, 3.0, 61, 26, 3.0, 57, 31, 3.0,
+    #      57, 36, 3.0, 57, 31, 3.0, 57, 34, 3.0, 57, 36, 3.0, 57, 34, 3.0, 57, 38, 3.0, 57, 34, 3.0, 57, 40, 3.0, 57, 34,
+    #      3.0]
+    # JI.decode_track(g)
+    JI.build_model()
+    print(JI.model.summary())

@@ -257,12 +257,20 @@ class Display:
                     # jarv.input_length = self.input_length
                     # jarv.use_model()
                     # jarv.generate_tune()
-                    if self.jarv == None or self.loaded_model!=self.model_name:
-                        self.jarv = DifferenceMelody("models/" + self.model_name + ".h5",input_length=self.input_length)
-
-                        # self.jarv.generate_tune()
-                        self.jarv.new_generator()
-
+                    if self.jarv == None:
+                        self.jarv = DifferenceMelody("models/" + self.model_name + ".h5",
+                                                     input_length=self.input_length)
+                    if  self.loaded_model!=self.model_name:
+                        if self.model_name != "recon" :
+                            # self.jarv = DifferenceMelody("models/" + self.model_name + ".h5",input_length=self.input_length)
+                            self.jarv.model_name = "models/" + self.model_name + ".h5"
+                            self.jarv.input_length = self.input_length
+                            # self.jarv.generate_tune()
+                            self.jarv.new_generator()
+                        else:
+                            self.jarv.model_name = "models/" + self.model_name + ".h5"
+                            self.jarv.input_length = self.input_length
+                            self.jarv.inf_generator()
 
 
                 if event.key == py.K_f:
@@ -643,7 +651,8 @@ def open_mid_randomly():
 
 if __name__ == '__main__':
 
-    file = "data/"+open_mid_randomly()
+    # file = "data/"+open_mid_randomly()
+    file = "data/"+"My_Melancholy_Blues.mid"
     if len(sys.argv) == 2:
         file = sys.argv[1]
     d = Display(mes=80, inp_length=1024, file=file)

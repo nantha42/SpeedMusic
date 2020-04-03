@@ -1,5 +1,11 @@
 [
   {
+    "recon": 1
+  },
+  {
+    "diffAttenmod128": 128
+  },
+  {
     "diffmod128v2": 128
   },
   {
