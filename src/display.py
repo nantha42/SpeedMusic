@@ -27,7 +27,7 @@ class Display:
         self.roll_index = 0
         self.j = 10
 
-        self.model_name = "models/recon.h5"
+        self.model_name = "models/inference.h5"
         self.controls = {"right_click": False, "play": False, "move_piano_roll_left": False, "update_ipanel": True,
                          "move_piano_roll_right": False, "playing": False, "show_map": False, "microplay": False}
         self.events = {"update_pianoroll": True}
@@ -72,6 +72,26 @@ class Display:
         self.button_addm = py.image.load(self.image_loc + "add_m.png")
         self.button_subm = py.image.load(self.image_loc + "sub_m.png")
         self.symbol_measure = py.image.load(self.image_loc + "measure.png")
+
+    def file_opener(self, filename):
+        document = "documents/" + filename
+        print(document)
+        if document[-3:] == "mid":
+            parsed_track = self.parse_first_track(document)
+            self.pianoroll.load_file(parsed_track, self.measure_limit * self.measure_length)
+
+        elif document[-3:] == "npz":
+            self.loader(document, npz=True)
+            self.events["update_pianoroll"] = True
+
+        elif document[-3:] == "npy":
+            self.loader(document)
+            self.events["update_pianoroll"] = True
+
+    def save_file(self):
+        np.save("documents/" + str(int(time.time())), self.pianoroll.notes)
+        print("Saved successfully")
+
 
     def draw(self):
         # For minimizing the frequency of the pianoroll surface updates
@@ -185,11 +205,13 @@ class Display:
                 self.events["update_pianoroll"] = True
                 x, y = py.mouse.get_pos()
                 print(x, y)
-                if 34 < x< 34+16 and 36<y<36+16:
-                    print("File clicked")
 
-                if 75 < x< 75+16 and 34<y<34+16:
-                    print("save clicked")
+                if 34 < x < 34 + 16 and 36 < y < 36 + 16:
+                    self.file_panel.handle_events((x, y))
+
+                if 75 < x < 75 + 16 and 36 < y < 36 + 16:
+                    print("Saving file")
+                    self.save_file()
 
                 if self.window is not None:
                     if (100 < x < (100 + self.window.width)) and (100 < y < (100 + self.window.height)):
@@ -276,11 +298,11 @@ class Display:
                     # jarv.input_length = self.input_length
                     # jarv.use_model()
                     # jarv.generate_tune()
-                    if self.jarv == None:
+                    if self.jarv is None:
                         self.jarv = DifferenceMelody("models/" + self.model_name + ".h5",
                                                      input_length=self.input_length)
                     if  self.loaded_model!=self.model_name:
-                        if self.model_name != "recon" :
+                        if self.model_name != "inference":
                             # self.jarv = DifferenceMelody("models/" + self.model_name + ".h5",input_length=self.input_length)
                             self.jarv.model_name = "models/" + self.model_name + ".h5"
                             self.jarv.input_length = self.input_length
@@ -303,7 +325,7 @@ class Display:
                 if event.key == py.K_e:
                     """Uses only the notes that is present in the 
                     pianoroll.notes_index"""
-                    if self.loaded_model == None:
+                    if self.loaded_model is None:
                         self.loaded_model = Melody(self.model_name)
 
                     use_notes = list()
@@ -334,10 +356,10 @@ class Display:
 
                 if event.key == py.K_q:
                     np.save('train_data.npy', self.pianoroll.notes)
-                    # print("Saved Successfully")
 
                 if event.key == py.K_s:
-                    np.save("saved_advance/" + str(int(time.time())), self.pianoroll.notes)
+                    np.save("saved_advance/" + str(int(time.time())),
+                            self.pianoroll.notes[self.pianoroll.selected_track])
                     print("Saved successfully")
 
                 if event.key == py.K_UP:
@@ -397,6 +419,36 @@ class Display:
                 self.controls["microplay"] = False
                 # print("Stopping Music")
                 py.mixer.music.stop()
+
+    def loader(self, file, npz=False):
+        array = np.load(file)
+        if npz:
+            array = array["arr_0"]
+        else:
+            if len(array) > 0:
+                print("array shape", array.shape)
+                array = array[0]
+        print("array shape", array.shape)
+        self.pianoroll.notes[self.pianoroll.selected_track] = array
+        self.pianoroll.notes_index[self.pianoroll.selected_track] = []
+        ind = 0
+        for _notes in self.pianoroll.notes:
+            note_index = []
+            # print("Before Error", _notes, _notes.shape)
+            for i in range(_notes.shape[1]):
+                row = _notes[:, i]
+                for v in range(len(row)):
+                    if row[v] != -1:
+                        note_index.append([v, i])
+            # print(len(note_index))
+            self.pianoroll.notes_index[ind] = note_index
+            ind += 1
+        if array.shape[0] < self.measure_limit:
+            diff = self.measure_limit - array.shape[1]
+            while diff > 0:
+                np.append(self.pianoroll.notes[self.pianoroll.selected_track], np.ones((48)) * -1)
+                diff -= 1
+
 
     def load_from_npy(self, file):
         array = np.load(file)
@@ -539,7 +591,7 @@ class Display:
                 req = self.instrument_panel.requests.pop(0)
                 print(req)
                 if req == "instruments":
-                    if self.window == None:
+                    if self.window is None:
                         self.window = AddInstrumentPanel()
                     # print("Window:", self.window)
 
@@ -598,8 +650,7 @@ class Display:
 
         if len(self.file_panel.requests) > 0:
             if self.window is None:
-                req = self.fine_panel.requests.pop(0)
-
+                req = self.file_panel.requests.pop(0)
                 if req == "open":
                     self.window = FilePanelWindow()
             pass
@@ -619,6 +670,18 @@ class Display:
                         self.model_panel.update()
                         self.window = None
                         self.controls["update_ipanel"] = True
+                    elif isinstance(self.window, FilePanelWindow):
+
+                        if self.window.result[0] > -1:
+                            list_of_files = os.listdir("documents/")
+                            open_file = list_of_files[self.window.result[0]]
+                            print("Opening File")
+                            self.file_opener(open_file)
+                        else:
+                            print("No files")
+                        self.window = None
+
+
 
         if self.helper.finished:
             self.helper.finished = False

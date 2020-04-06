@@ -266,6 +266,7 @@ class Pianoroll:
         unit is 32nd note.
         """
         array = np.ones([48, int(measure_limit)]) * -1
+        self.notes_index[self.selected_track] = []
         for note_index, notes_track in parsed_track:
             note_index = note_index - 36
             if note_index >= 0 and note_index < 48:

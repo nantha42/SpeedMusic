@@ -51,7 +51,7 @@ def recon():
                         [recent_out] + [lstm_1_states, lstm_2_states])
     final_model.summary()
     # lstm2_out, h2,c2 = model.layers[2](lstm1_out,initial_state=lstm2_initial_states)
-    final_model.save("drive/My Drive/DataProject/models/recon.h5")
+    final_model.save("drive/My Drive/DataProject/models/inference.h5")
     print(h1)
     print(c1)
 
