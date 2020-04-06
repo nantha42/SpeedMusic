@@ -772,7 +772,7 @@ class DifferenceMelody(Melody):
                         curnote = 24
                         encoded.extend([curnote + 7, time_quantum + 1])  # 24 is the starting sequence for all songs
 
-                if not starting:
+                elif not starting:
                     i = get_top_index(quantum_notes)
                     if i > -1:
                         if rest > 0:
@@ -790,7 +790,6 @@ class DifferenceMelody(Melody):
             elif not starting:
                 rest += 1
 
-        # print(encoded)
         return encoded
 
     def decode_track(self, encoded):
