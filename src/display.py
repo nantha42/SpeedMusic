@@ -11,7 +11,6 @@ from change_model_panel import *
 from file_panel import *
 
 
-
 class Display:
 
     def __init__(self, mes, file="", inp_length=256):
@@ -43,7 +42,7 @@ class Display:
         self.openfile = False
         self.input_length = inp_length
 
-        self.helper = Helper(self.pianoroll.notes, self.model_name, self.input_length,512)
+        self.helper = Helper(self.pianoroll.notes, self.model_name, self.input_length, 512)
 
         if file == "":
             self.openfile = False
@@ -91,7 +90,6 @@ class Display:
     def save_file(self):
         np.save("documents/" + str(int(time.time())), self.pianoroll.notes)
         print("Saved successfully")
-
 
     def draw(self):
         # For minimizing the frequency of the pianoroll surface updates
@@ -301,7 +299,7 @@ class Display:
                     if self.jarv is None:
                         self.jarv = DifferenceMelody("models/" + self.model_name + ".h5",
                                                      input_length=self.input_length)
-                    if  self.loaded_model!=self.model_name:
+                    if self.loaded_model != self.model_name:
                         if self.model_name != "inference":
                             # self.jarv = DifferenceMelody("models/" + self.model_name + ".h5",input_length=self.input_length)
                             self.jarv.model_name = "models/" + self.model_name + ".h5"
@@ -312,7 +310,6 @@ class Display:
                             self.jarv.model_name = "models/" + self.model_name + ".h5"
                             self.jarv.input_length = self.input_length
                             self.jarv.inf_generator()
-
 
                 if event.key == py.K_f:
                     np.save("temp.npy", self.pianoroll.notes[self.pianoroll.selected_track])
@@ -449,7 +446,6 @@ class Display:
                 np.append(self.pianoroll.notes[self.pianoroll.selected_track], np.ones((48)) * -1)
                 diff -= 1
 
-
     def load_from_npy(self, file):
         array = np.load(file)
 
@@ -474,11 +470,17 @@ class Display:
             # print(len(note_index))
             self.pianoroll.notes_index[ind] = note_index
             ind += 1
-        if array.shape[0] < self.measure_limit:
-            diff = self.measure_limit - array.shape[1]
-            while diff > 0:
-                np.append(self.pianoroll.notes[self.pianoroll.selected_track],np.ones((48))*-1)
-                diff-=1
+        print("Measure Len", self.measure_limit, array.shape)
+        if array.shape[1] < self.measure_limit:
+            print("executed measure insuff")
+            diff = self.measure_limit * self.measure_length - array.shape[1]
+            meas_size_array = np.ones((48, self.measure_length * self.measure_limit)) * -1
+            meas_size_array[:, :array.shape[1]] = array
+            self.pianoroll.notes[self.pianoroll.selected_track] = meas_size_array
+            # while diff > 0:
+            #     self.pianoroll.notes[self.pianoroll.selected_track] = np.append(
+            #         self.pianoroll.notes[self.pianoroll.selected_track], np.ones((48, 1)) * -1,axis=1)
+            #     diff -= 1
 
         # print("Note_indexs", self.pianoroll.notes_index[self.pianoroll.selected_track])
         # print("notes_index", self.pianoroll.notes_index)
@@ -681,12 +683,9 @@ class Display:
                             print("No files")
                         self.window = None
 
-
-
         if self.helper.finished:
             self.helper.finished = False
             self.pianoroll.apply_generated(self.helper.generated)
-
 
     def token_generator(self):
 
@@ -725,7 +724,6 @@ class Display:
         _, self.input_length = self.model_panel.models_available[self.model_panel.selected_model_index]
         self.rem_tok_for_generation = str(self.input_length - len(temp))
 
-
     def run(self):
         while not self.quit:
             self.draw()
@@ -736,15 +734,17 @@ class Display:
 
         # print(self.pianoroll.notes)
 
+
 def open_mid_randomly():
     mids = os.listdir("data/")
     mid = mids[np.random.randint(len(mids))]
     return mid
 
+
 if __name__ == '__main__':
 
     # file = "data/"+open_mid_randomly()
-    file = "data/"+"My_Melancholy_Blues.mid"
+    file = "data/" + "My_Melancholy_Blues.mid"
     if len(sys.argv) == 2:
         file = sys.argv[1]
     d = Display(mes=80, inp_length=1024, file=file)
