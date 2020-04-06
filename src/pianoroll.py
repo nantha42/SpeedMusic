@@ -1,7 +1,7 @@
 
 import pygame.gfxdraw
 import numpy as np
-
+from jarvis import *
 from font import *
 from pypianoroll import Track, Multitrack
 from matplotlib import pyplot as plt
@@ -18,11 +18,16 @@ class Pianoroll:
         self.measures = measures
         py.font.init()
 
+        self.generated = None
+        self.generated_notes_index = [[]]
+
         self.n_tracks = 1
         self.selected_track = 0
         self.notes = [np.array(np.ones((48, self.measures * 32))) * -1]
         self.programs = [0]
+
         self.notes_index = [[]]
+
         # print(self.notes)
         self.timeFont = Font(10)
         self.update()
@@ -217,6 +222,23 @@ class Pianoroll:
                     py.draw.rect(self.pianoroll, (200, 0, 0), (
                         (x * 20 * self.controls["h_zoom"] + self.controls["timebar"]) + 20, y * 10 + 10 + 2,
                         20 * self.controls["h_zoom"] * (2 ** self.notes[self.selected_track][y][x]) - 2, 10 - 2))
+
+
+    def apply_generated(self,generated):
+        self.generated = generated
+        self.generated_notes_index = []
+        for _notes in self.generated:
+            note_index = []
+            # print("Before Error", _notes, _notes.shape)
+            for i in range(_notes.shape[1]):
+                row = _notes[:, i]
+                for v in range(len(row)):
+                    if row[v] != -1:
+                        note_index.append([v, i])
+
+            # print(len(note_index))
+            self.generated_notes_index.append(note_index)
+
 
     def send_event(self, event):
         if event == "measure_increased":

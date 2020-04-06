@@ -58,4 +58,3 @@ class ModelPanelListener(pygame.sprite.Sprite):
     def get_model_detail(self):
         print(self.models_available[self.selected_model_index])
         return self.models_available[self.selected_model_index]
-

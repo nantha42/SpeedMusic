@@ -9,7 +9,6 @@ from tensorflow.keras.models import load_model
 from tensorflow.keras.layers import BatchNormalization as BatchNorm
 import matplotlib.pyplot as plt
 
-
 from tensorflow.keras.layers import Layer
 import tensorflow.keras.backend as K
 import tensorflow
@@ -22,6 +21,7 @@ import numpy as np
 import os
 import time
 import pickle
+import threading
 
 
 class Generator2(Sequence):
@@ -787,7 +787,6 @@ class DifferenceMelody(Melody):
                         if 0 <= curnote <= 47:
                             encoded.extend([curnote + 7, time_quantum + 1])
 
-
             elif not starting:
                 rest += 1
 
@@ -801,11 +800,9 @@ class DifferenceMelody(Melody):
         # print(orray.shape)
         # print(encoded)
         for i in range(len(encoded)):
-
             x = encoded[i]
             if x == 0:
                 pass
-
             elif 7 <= x <= 54:
                 x = x - 24 - 7
                 if i + 1 < len(encoded):
@@ -833,10 +830,77 @@ class DifferenceMelody(Melody):
         self.melody = []
         self.melody.append(temp)
 
+    def thread_generator(self, multiple_notes):
+        if self.loaded_model != self.model_name:
+            print(self.model_name)
+            self.model = load_model(self.model_name, custom_objects={"attention": attention})
+            self.loaded_model = self.model_name
+            print(self.model.summary())
+            print("Model loaded from disk")
+        else:
+            self.build_model()
+            print("Already loaded")
+
+        generated_outputs = []
+        for notes in multiple_notes:
+            self.input_data_to_model(notes)
+            self.melody = self.melody[0]
+            req_length = len(self.melody) + 5
+            print("Thread_generatror:", self.melody)
+            input = []
+            output = []
+            inm = []
+            ino = []
+
+            for i in range(0, len(self.melody) - 1, 1):
+                ip = []
+                ipm = []
+                # print(i, len(self.melody) - self.input_length, step)
+                for q in self.melody[i:i + 1]:
+                    o = np.zeros(self.notes_classes)
+                    o[int(q)] = 1
+                    ip.append(o)
+                    ipm.append(q)
+                input.append(ip)
+                inm.append(ipm)
+
+            # a,b,c,d = np.zeros((512,1)),np.zeros((512,1)),np.zeros((512,1)),np.zeros((512,1))
+
+            a, b, c, d = np.random.normal(0, 1, (1, 512)), np.random.normal(0, 1, (1, 512)), np.random.normal(0, 1, (
+                1, 512)), np.random.normal(0, 1, (1, 512))
+            print(a.shape,len(input))
+            p = []
+
+            for i in range(req_length):
+                print(i)
+                if i < len(input):
+                    inp = np.array([input[i]])
+                    # a, b, c, d = a + np.random.normal(0, 0.1, (1, 512)), b + np.random.normal(0, 0.1, (
+                    # 1, 512)), c + np.random.normal(0, 0.1, (1, 512)), d + np.random.normal(0, 0.1, (1, 512))
+                    out, a, b, c, d = self.model.predict([inp] + [a, b, c, d])
+                    p.append(int(np.argmax(out[0][0])))
+
+                else:
+                    o = np.zeros(self.notes_classes)
+                    print("P",p)
+                    o[p[-1]] = 1
+                    inp = np.array([[o]])
+                    out, a, b, c, d = self.model.predict([inp] + [a, b, c, d])
+                    a, b = a + np.random.normal(0, 0.1, (1, 512)), b + np.random.normal(0, 0.1, (1, 512))
+                    p.append(int(np.argmax(out[0][0])))
+            p = self.melody+p[len(self.melody):]
+            generated = self.decode_track(p)
+            print("Thread:",generated)
+            user_created = self.decode_track(self.melody)
+            generated[:, :user_created.shape[1]] = -1
+            print("NonZeros in Generated",np.nonzero(generated+1))
+            generated_outputs.append(generated)
+        return generated_outputs
+
     def inf_generator(self):
         if self.loaded_model != self.model_name:
             print(self.model_name)
-            self.model = load_model(self.model_name,custom_objects={"attention":attention})
+            self.model = load_model(self.model_name, custom_objects={"attention": attention})
             self.loaded_model = self.model_name
             print(self.model.summary())
             print("Model loaded from disk")
@@ -847,7 +911,13 @@ class DifferenceMelody(Melody):
         sample = np.load("temp.npy")
         self.input_data_to_model(sample)
         self.melody = self.melody[0]
-        req_length = 500
+        left_tokens = []
+        if len(self.melody) > 50:
+            left_tokens = self.melody[:len(self.melody)-50]
+            self.melody = self.melody[len(self.melody)-50:]
+            req_length = len(self.melody)+20
+        else:
+            req_length = len(self.melody)+20
 
         input = []
         output = []
@@ -877,14 +947,17 @@ class DifferenceMelody(Melody):
 
         # a,b,c,d = np.zeros((512,1)),np.zeros((512,1)),np.zeros((512,1)),np.zeros((512,1))
 
-        a, b, c, d = np.random.normal(0,1,(1,512)),np.random.normal(0,1,(1,512)),np.random.normal(0,1,(1,512)),np.random.normal(0,1,(1,512))
+        a, b, c, d = np.random.normal(0, 1, (1, 512)), np.random.normal(0, 1, (1, 512)), np.random.normal(0, 1, (
+            1, 512)), np.random.normal(0, 1, (1, 512))
         print(a.shape)
         p = []
         for i in range(req_length):
             print(i)
             if i < len(input):
                 inp = np.array([input[i]])
-                out,a,b,c,d = self.model.predict([inp]+[a,b,c,d])
+                # a, b, c, d = a + np.random.normal(0, 0.1, (1, 512)), b + np.random.normal(0, 0.1, (
+                # 1, 512)), c + np.random.normal(0, 0.1, (1, 512)), d + np.random.normal(0, 0.1, (1, 512))
+                out, a, b, c, d = self.model.predict([inp] + [a, b, c, d])
                 p.append(int(np.argmax(out[0][0])))
                 # print(out.shape)
             else:
@@ -892,21 +965,22 @@ class DifferenceMelody(Melody):
                 o[p[-1]] = 1
                 inp = np.array([[o]])
                 out, a, b, c, d = self.model.predict([inp] + [a, b, c, d])
+                a, b = a + np.random.normal(0, 0.1, (1, 512)), b + np.random.normal(0, 0.1, (1, 512))
                 p.append(int(np.argmax(out[0][0])))
+        p = left_tokens + self.melody + p[len(self.melody):]
         self.decode_track(p)
 
     def new_generator(self):
 
         if self.loaded_model != self.model_name:
             print(self.model_name)
-            self.model = load_model(self.model_name,custom_objects={"attention":attention})
+            self.model = load_model(self.model_name, custom_objects={"attention": attention})
             self.loaded_model = self.model_name
             print(self.model.summary())
             print("Model loaded from disk")
         else:
             self.build_model()
             print("Already loaded")
-
 
         sample = np.load("temp.npy")
         print(sample.shape)
@@ -1058,16 +1132,32 @@ class DifferenceMelody(Melody):
         # print(generated)
         # self.advance_converter(generated)
 
+class Helper(threading.Thread):
+    def __init__(self, notes, model_name, inp_length, h_size):
+        threading.Thread.__init__(self)
+        self.changed = False
+        self.notes = notes  # nparray
+        self.model_name = model_name
+        self.stop = False
+        self.running = True
+        self.generated = None
+        self.finished = False
+
+        self.jarv = DifferenceMelody(self.model_name, input_length=inp_length, hidden_size=h_size)
+
+    def run(self):
+        print("Started")
+
+        while self.running:
+            if self.changed:
+                self.generated = self.jarv.thread_generator(self.notes)
+                self.changed = False
+                self.finished = True
+
+
+
 
 if __name__ == '__main__':
     JI = DifferenceMelody("models/" + "master2.h5", hidden_size=256, input_length=25, epochs=6)
-    # sample = np.load("./high_npy/Rites-Of-Spring.02192.npz")
-    # JI.input_data_to_model(sample["arr_0"])
-    # g = [0, 31, 3.0, 31, 3.0, 57, 33, 3.0, 57, 36, 3.0, 61, 33, 3.0, 57, 34, 3.0, 57, 33, 3.0, 57, 31, 3.0, 61, 31, 3.0,
-    #      57, 33, 3.0, 57, 36, 3.0, 61, 33, 3.0, 57, 34, 3.0, 57, 31, 3.0, 57, 33, 3.0, 61, 31, 3.0, 57, 36, 3.0, 57, 38,
-    #      3.0, 61, 36, 3.0, 57, 31, 3.0, 61, 36, 3.0, 57, 38, 3.0, 57, 36, 3.0, 57, 31, 3.0, 61, 26, 3.0, 57, 31, 3.0,
-    #      57, 36, 3.0, 57, 31, 3.0, 57, 34, 3.0, 57, 36, 3.0, 57, 34, 3.0, 57, 38, 3.0, 57, 34, 3.0, 57, 40, 3.0, 57, 34,
-    #      3.0]
-    # JI.decode_track(g)
     JI.build_model()
     print(JI.model.summary())

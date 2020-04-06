@@ -11,9 +11,11 @@ from change_model_panel import *
 from file_panel import *
 
 
+
 class Display:
 
     def __init__(self, mes, file="", inp_length=256):
+        self.help = False
         py.display.init()
 
         self.width = 1000
@@ -24,7 +26,8 @@ class Display:
         self.pianoroll = Pianoroll(self.measure_limit)
         self.roll_index = 0
         self.j = 10
-        self.model_name = "models/modelDNoEmbed.h5"
+
+        self.model_name = "models/recon.h5"
         self.controls = {"right_click": False, "play": False, "move_piano_roll_left": False, "update_ipanel": True,
                          "move_piano_roll_right": False, "playing": False, "show_map": False, "microplay": False}
         self.events = {"update_pianoroll": True}
@@ -39,6 +42,9 @@ class Display:
         self.loaded_model = None
         self.openfile = False
         self.input_length = inp_length
+
+        self.helper = Helper(self.pianoroll.notes, self.model_name, self.input_length,512)
+
         if file == "":
             self.openfile = False
             self.file = ""
@@ -178,7 +184,12 @@ class Display:
                 self.event_handled = True
                 self.events["update_pianoroll"] = True
                 x, y = py.mouse.get_pos()
-                # print(x, y)
+                print(x, y)
+                if 34 < x< 34+16 and 36<y<36+16:
+                    print("File clicked")
+
+                if 75 < x< 75+16 and 34<y<34+16:
+                    print("save clicked")
 
                 if self.window is not None:
                     if (100 < x < (100 + self.window.width)) and (100 < y < (100 + self.window.height)):
@@ -202,6 +213,14 @@ class Display:
                     self.pianoroll.enternote(s, k)
                     self.play(1)
                     self.token_generator()
+
+                    if self.help:
+                        if not self.helper.is_alive():
+                            self.helper.model_name = self.model_name
+                            self.helper.start()
+                            print(self.helper.is_alive())
+                        else:
+                            self.helper.changed = True
 
                 if x >= 580 and x <= 596 and y >= 30 and y <= 62:
                     if y >= 30 and y <= 46:
@@ -578,6 +597,11 @@ class Display:
                     self.window = ChangeModelPanel(self.model_panel.get_models_list())
 
         if len(self.file_panel.requests) > 0:
+            if self.window is None:
+                req = self.fine_panel.requests.pop(0)
+
+                if req == "open":
+                    self.window = FilePanelWindow()
             pass
 
         if self.window != None:
@@ -595,6 +619,11 @@ class Display:
                         self.model_panel.update()
                         self.window = None
                         self.controls["update_ipanel"] = True
+
+        if self.helper.finished:
+            self.helper.finished = False
+            self.pianoroll.apply_generated(self.helper.generated)
+
 
     def token_generator(self):
 
@@ -634,12 +663,12 @@ class Display:
         self.rem_tok_for_generation = str(self.input_length - len(temp))
 
 
-
     def run(self):
         while not self.quit:
             self.draw()
             self.event_handler()
             self.play()
+
             self.request_handler()
 
         # print(self.pianoroll.notes)

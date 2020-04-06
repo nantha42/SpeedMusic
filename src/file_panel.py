@@ -21,3 +21,7 @@ class FilePanelListener:
             self.requests.append("open")
         else:
             self.requests.append("close")
+
+class FilePanelWindow:
+    def __init__(self):
+        pass
