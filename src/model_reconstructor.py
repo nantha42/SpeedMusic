@@ -24,7 +24,9 @@ import pickle
 
 
 def recon():
-    model = tf.keras.models.load_model("drive/My Drive/DataProject/models/diffretstate.h5")
+    # model = tf.keras.models.load_model("drive/My Drive/DataProject/models/diffretstate.h5")
+
+    model = tf.keras.models.load_model("model.h5")
     model.summary()
 
     state_h1 = Input(shape=(512,))
@@ -34,14 +36,14 @@ def recon():
     state_c2 = Input(shape=(512,))
     lstm1_initial_states = [state_h1, state_c1]
     lstm2_initial_states = [state_h2, state_c2]
-
     inp_data = model.inputs[0]
-
     print(inp_data)
     print(model.layers)
-    lstm1_out, h1, c1 = model.layers[1](inp_data, initial_state=lstm1_initial_states)
+    lstm1_out, h1, c1 = model.layers[1] \
+        (inp_data, initial_state=lstm1_initial_states)
     lstm_1_states = [h1, c1]
-    lstm2_out, h2, c2 = model.layers[2](lstm1_out, initial_state=lstm2_initial_states)
+    lstm2_out, h2, c2 = model.layers[2] \
+        (lstm1_out, initial_state=lstm2_initial_states)
     lstm_2_states = [h2, c2]
 
     recent_out = model.layers[3](lstm2_out)
@@ -50,10 +52,7 @@ def recon():
     final_model = Model([inp_data] + [lstm1_initial_states, lstm2_initial_states],
                         [recent_out] + [lstm_1_states, lstm_2_states])
     final_model.summary()
-    # lstm2_out, h2,c2 = model.layers[2](lstm1_out,initial_state=lstm2_initial_states)
     final_model.save("drive/My Drive/DataProject/models/inference.h5")
-    print(h1)
-    print(c1)
 
 
 dict_model = recon()

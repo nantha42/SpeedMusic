@@ -354,11 +354,6 @@ class Display:
                 if event.key == py.K_q:
                     np.save('train_data.npy', self.pianoroll.notes)
 
-                if event.key == py.K_s:
-                    np.save("saved_advance/" + str(int(time.time())),
-                            self.pianoroll.notes[self.pianoroll.selected_track])
-                    print("Saved successfully")
-
                 if event.key == py.K_UP:
                     if self.pianoroll.controls["h_zoom"] >= 1 and not self.controls["playing"]:
                         self.pianoroll.controls["h_zoom"] += 1

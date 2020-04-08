@@ -134,10 +134,16 @@ class Melody:
         if self.loaded_model != self.model_name:
             print(self.notes_classes)
             dropout = 0.4
+            self.model = Sequential()
+
             self.model.add(
-                LSTM(self.hidden_size, input_shape=(self.input_length, self.notes_classes), return_sequences=True,
+                LSTM(self.hidden_size,
+                     input_shape=(self.input_length, self.notes_classes),
+                     return_sequences=True,
                      recurrent_dropout=dropout), )
-            self.model.add(LSTM(self.hidden_size, recurrent_dropout=dropout, return_sequences=True))
+            self.model.add(LSTM(self.hidden_size,
+                                recurrent_dropout=dropout,
+                                return_sequences=True))
             self.model.add(BatchNorm())
             self.model.add(Dropout(dropout))
             self.model.add(Dense(256))
@@ -150,7 +156,9 @@ class Melody:
             self.model.add(Dense(self.notes_classes))
             self.model.add(Activation('softmax'))
             # self.directory = "drive/My Drive/DataProject/1"
-            self.model.compile(loss='categorical_crossentropy', optimizer='rmsprop', metrics=['categorical_accuracy'])
+            self.model.compile(loss='categorical_crossentropy',
+                               optimizer='rmsprop',
+                               metrics=['categorical_accuracy'])
             self.loaded_model = self.model_name
 
     def input_data_to_model(self, nparray):
@@ -757,10 +765,8 @@ class DifferenceMelody(Melody):
         startnote = None
         encoded = [0]
         rest = 0
-
         for quantum in range(nparray.shape[1]):
             quantum_notes = nparray[:, quantum]
-
             if len(np.nonzero(quantum_notes + 1)[0]) > 0:
                 if starting:
                     i = get_top_index(quantum_notes)
@@ -770,7 +776,8 @@ class DifferenceMelody(Melody):
                         startnote = i
                         time_quantum = quantum_notes[i]
                         curnote = 24
-                        encoded.extend([curnote + 7, time_quantum + 1])  # 24 is the starting sequence for all songs
+                        encoded.extend([curnote + 7,
+                                        time_quantum + 1])
 
                 elif not starting:
                     i = get_top_index(quantum_notes)
@@ -780,13 +787,11 @@ class DifferenceMelody(Melody):
                                 rest = 32
                             encoded.append(54 + rest)
                             rest = 0
-                        # note is lower than startnote then curnote is high
-                        # note is higher than startnote then curnote is low
                         time_quantum = quantum_notes[i]
                         curnote = 24 + startnote - i
                         if 0 <= curnote <= 47:
-                            encoded.extend([curnote + 7, time_quantum + 1])
-
+                            encoded.extend([curnote + 7,
+                                            time_quantum + 1])
             elif not starting:
                 rest += 1
 
@@ -811,11 +816,13 @@ class DifferenceMelody(Melody):
                         array = np.ones((48, 1)) * -1
                         if 26 - x < 48:
                             array[26 - x] = t - 1
-                            orray = np.append(orray, array, axis=1)
+                            orray = np.append(orray,
+                                              array, axis=1)
             elif 55 <= x <= 86:
                 x = x - 54
                 array = np.ones((48, x)) * -1
-                orray = np.append(orray, array, axis=1)
+                orray = np.append(orray,
+                                  array, axis=1)
         np.save("generated.npy", orray)
         # print(orray)
         return orray
@@ -910,6 +917,8 @@ class DifferenceMelody(Melody):
         sample = np.load("temp.npy")
         self.input_data_to_model(sample)
         self.melody = self.melody[0]
+        if len(self.melody) == 0:
+            return
         left_tokens = []
         if len(self.melody) > 50:
             left_tokens = self.melody[:len(self.melody)-50]
@@ -949,22 +958,24 @@ class DifferenceMelody(Melody):
         a, b, c, d = np.random.normal(0, 1, (1, 512)), np.random.normal(0, 1, (1, 512)), np.random.normal(0, 1, (
             1, 512)), np.random.normal(0, 1, (1, 512))
         print(a.shape)
+
         p = []
         for i in range(req_length):
             print(i)
             if i < len(input):
                 inp = np.array([input[i]])
-                # a, b, c, d = a + np.random.normal(0, 0.1, (1, 512)), b + np.random.normal(0, 0.1, (
-                # 1, 512)), c + np.random.normal(0, 0.1, (1, 512)), d + np.random.normal(0, 0.1, (1, 512))
-                out, a, b, c, d = self.model.predict([inp] + [a, b, c, d])
+                out, a, b, c, d = self.model.predict(
+                    [inp] + [a, b, c, d])
                 p.append(int(np.argmax(out[0][0])))
-                # print(out.shape)
+
             else:
                 o = np.zeros(self.notes_classes)
                 o[p[-1]] = 1
                 inp = np.array([[o]])
-                out, a, b, c, d = self.model.predict([inp] + [a, b, c, d])
-                a, b = a + np.random.normal(0, 0.1, (1, 512)), b + np.random.normal(0, 0.1, (1, 512))
+                out, a, b, c, d = self.model.predict(
+                    [inp] + [a, b, c, d])
+                a = a + np.random.normal(0, 0.1, (1, 512))
+                b = b + np.random.normal(0, 0.1, (1, 512))
                 p.append(int(np.argmax(out[0][0])))
         p = left_tokens + self.melody + p[len(self.melody):]
         self.decode_track(p)
