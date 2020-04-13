@@ -1,5 +1,8 @@
 [
   {
+    "transformer": 40
+  },
+  {
     "inference": 1
   },
   {
@@ -16,48 +19,5 @@
   },
   {
     "diffmod1": 75
-  },
-  {
-    "25_model": 25
-  },
-
-  {
-    "atom": 5
-  },
-  {
-    "mark4": 400
-  },
-  {
-    "mark2": 400
-  },
-  {
-    "mark3": 400
-  },
-  {
-    "complexmaster": 1024
-  },
-  {
-    "master4": 1024
-  },
-  {
-    "modelA": 256
-  },
-  {
-    "modelmonger": 512
-  },
-  {
-    "modelJ": 512
-  },
-  {
-    "modelK": 512
-  },
-  {
-    "master": 1024
-  },
-  {
-    "master1": 1024
-  },
-  {
-    "master2": 1024
   }
 ]

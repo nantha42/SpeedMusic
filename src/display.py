@@ -9,6 +9,8 @@ from add_instruments_panel import *
 from model_panel import *
 from change_model_panel import *
 from file_panel import *
+from Transformer import *
+
 
 
 class Display:
@@ -296,20 +298,54 @@ class Display:
                     # jarv.input_length = self.input_length
                     # jarv.use_model()
                     # jarv.generate_tune()
+                    print(self.model_name, self.loaded_model)
                     if self.jarv is None:
                         self.jarv = DifferenceMelody("models/" + self.model_name + ".h5",
                                                      input_length=self.input_length)
                     if self.loaded_model != self.model_name:
-                        if self.model_name != "inference":
+
+                        if self.model_name != "inference" and self.model_name != "transformer":
+                            if self.loaded_model == "transformer":
+                                self.jarv = DifferenceMelody("models/" + self.model_name + ".h5",
+                                                             input_length=self.input_length)
                             # self.jarv = DifferenceMelody("models/" + self.model_name + ".h5",input_length=self.input_length)
+                            print("some other")
                             self.jarv.model_name = "models/" + self.model_name + ".h5"
+                            print("Model name", self.jarv.model_name)
                             self.jarv.input_length = self.input_length
                             # self.jarv.generate_tune()
+                            self.loaded_model = self.model_name
+                            self.jarv.new_generator()
+
+
+                        elif self.model_name == "transformer":
+
+                            print("In transformer")
+                            self.jarv = MusicTransformer()
+                            self.jarv.input_length = self.input_length
+                            self.jarv.build_transformer()
+                            self.loaded_model = "transformer"
                             self.jarv.new_generator()
                         else:
+                            print("inference")
                             self.jarv.model_name = "models/" + self.model_name + ".h5"
                             self.jarv.input_length = self.input_length
+                            self.loaded_model = self.model_name
                             self.jarv.inf_generator()
+
+
+                    else:
+                        if self.jarv.model_name == "transformer":
+                            self.loaded_model = "transformer"
+                            self.jarv.new_generator()
+
+                        elif self.jarv.model_name == "inference":
+                            self.loaded_model = self.model_name
+                            self.jarv.inf_generator()
+                        else:
+                            self.loaded_model = self.model_name
+                            self.jarv.new_generator()
+
 
                 if event.key == py.K_f:
                     np.save("temp.npy", self.pianoroll.notes[self.pianoroll.selected_track])
