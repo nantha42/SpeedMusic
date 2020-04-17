@@ -321,6 +321,7 @@ class Pianoroll:
         print("Copied", x1, y1, "  ", x2, y2)
         self.selected = self.notes[self.selected_track][x1:x2, y1:y2]
         print(self.selected)
+        self.note_selection = False
 
     def paste_notes(self, kpos):
         pos = [kpos[1], kpos[0]]
