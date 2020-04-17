@@ -284,3 +284,27 @@ class Pianoroll:
         self.notes_index[self.selected_track] = []
         # print("Cleared")
 
+    def shiftup(self):
+        removeit = []
+        for note in self.notes_index[self.selected_track]:
+            note[0] -= 1
+            if note[0] < 0:
+                removeit.append(note)
+
+        for note in removeit:
+            self.notes_index[self.selected_track].remove(note)
+
+        self.notes[self.selected_track] = np.roll(self.notes[self.selected_track], -1, axis=0)
+        self.notes[self.selected_track][-1] = -1
+
+    def shiftdown(self):
+        removeit = []
+        for note in self.notes_index[self.selected_track]:
+            note[0] += 1
+            if note[0] > 47:
+                removeit.append(note)
+
+        for note in removeit:
+            self.notes_index[self.selected_track].remove(note)
+        self.notes[self.selected_track] = np.roll(self.notes[self.selected_track], 1, axis=0)
+        self.notes[self.selected_track][0] = -1

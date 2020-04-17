@@ -68,6 +68,8 @@ class Display:
         self.button_pause = py.image.load(self.image_loc + "pause.png")
         self.button_file = py.image.load(self.image_loc + "file.png")
         self.button_save = py.image.load(self.image_loc + "save.png")
+        self.button_shiftup = py.image.load(self.image_loc + "shiftup.png")
+        self.button_shiftdown = py.image.load(self.image_loc + "shiftdown.png")
         self.button_note = py.image.load(self.image_loc + str(
             2 ** self.pianoroll.controls["nthnote"]) + "_on.png")
         self.button_addm = py.image.load(self.image_loc + "add_m.png")
@@ -147,6 +149,8 @@ class Display:
         self.win.blit(self.button_file, (30, 30))
         self.win.blit(self.button_save, (70, 30))
         self.win.blit(self.model_panel.image, (620, 45))
+        self.win.blit(self.button_shiftup, (425, 32))
+        self.win.blit(self.button_shiftdown, (425, 48))
         font = Font(14)
         # print()
 
@@ -205,6 +209,12 @@ class Display:
                 self.events["update_pianoroll"] = True
                 x, y = py.mouse.get_pos()
                 print(x, y)
+
+                if 425 < x < 425 + 16 and 32 < y < 32 + 16:
+                    self.pianoroll.shiftup()
+
+                if 425 < x < 425 + 16 and 48 < y < 48 + 16:
+                    self.pianoroll.shiftdown()
 
                 if 34 < x < 34 + 16 and 36 < y < 36 + 16:
                     self.file_panel.handle_events((x, y))
