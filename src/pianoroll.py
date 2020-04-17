@@ -342,5 +342,3 @@ class Pianoroll:
             for v in range(len(row)):
                 if row[v] != -1:
                     self.notes_index[track_no].append([v, i])
-
-        # print(len(note_index))
