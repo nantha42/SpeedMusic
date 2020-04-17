@@ -70,11 +70,17 @@ class Display:
         self.button_save = py.image.load(self.image_loc + "save.png")
         self.button_shiftup = py.image.load(self.image_loc + "shiftup.png")
         self.button_shiftdown = py.image.load(self.image_loc + "shiftdown.png")
+        self.button_selection = py.image.load(self.image_loc + "selection_false.png")
+        self.button_paste = py.image.load(self.image_loc + "paste.png")
         self.button_note = py.image.load(self.image_loc + str(
             2 ** self.pianoroll.controls["nthnote"]) + "_on.png")
         self.button_addm = py.image.load(self.image_loc + "add_m.png")
         self.button_subm = py.image.load(self.image_loc + "sub_m.png")
         self.symbol_measure = py.image.load(self.image_loc + "measure.png")
+        self.sx = -1
+        self.sy = -1
+        self.tx = -1
+        self.ty = -1
 
     def file_opener(self, filename):
         document = "documents/" + filename
@@ -151,6 +157,10 @@ class Display:
         self.win.blit(self.model_panel.image, (620, 45))
         self.win.blit(self.button_shiftup, (425, 32))
         self.win.blit(self.button_shiftdown, (425, 48))
+        # if self.pianoroll.note_selection:
+        #     self.button_selection = py.image.load(self.image_loc + "selection_true.png")
+        self.win.blit(self.button_selection, (375, 30))
+        self.win.blit(self.button_paste, (325, 30))
         font = Font(14)
         # print()
 
@@ -204,11 +214,40 @@ class Display:
                 if event.button == 3:
                     self.controls["right_click"] = True
 
+                if self.pianoroll.note_selection:
+                    self.pianoroll.paste_selected = False
+                    x, y = py.mouse.get_pos()
+                    s = int((x - 200))
+                    k = int((y - 110))
+                    s = int((s - self.pianoroll.controls["timebar"]) / (20 * self.pianoroll.controls["h_zoom"]))
+                    k = int(k / 10)
+                    self.sy = s
+                    self.sx = k
+
             if event.type == py.MOUSEBUTTONUP:
                 self.event_handled = True
                 self.events["update_pianoroll"] = True
                 x, y = py.mouse.get_pos()
                 print(x, y)
+
+                if 325 < x < 325 + 32 and 30 < y < 30 + 32:
+                    self.pianoroll.paste_selected = not self.pianoroll.paste_selected
+
+                    if self.pianoroll.paste_selected:
+                        self.button_paste = py.image.load(self.image_loc + "paste_selected.png")
+                        self.pianoroll.note_selection = False
+
+                    else:
+                        self.button_paste = py.image.load(self.image_loc + "paste.png")
+
+                if 375 < x < 375 + 32 and 30 < y < 30 + 32:
+                    self.pianoroll.note_selection = not self.pianoroll.note_selection
+                    if self.pianoroll.note_selection:
+                        self.button_selection = py.image.load(self.image_loc + "selection_true.png")
+                        self.pianoroll.paste_selected = False
+
+                    else:
+                        self.button_selection = py.image.load(self.image_loc + "selection_false.png")
 
                 if 425 < x < 425 + 16 and 32 < y < 32 + 16:
                     self.pianoroll.shiftup()
@@ -238,21 +277,40 @@ class Display:
 
                 # On clicking the pianoroll for entering notes
                 if 200 <= x <= 980 and 110 <= y <= 590 and self.controls["right_click"] == False:
-                    s = int((x - 200))
-                    k = int((y - 110))
-                    s = int((s - self.pianoroll.controls["timebar"]) / (20 * self.pianoroll.controls["h_zoom"]))
-                    k = int(k / 10)
-                    self.pianoroll.enternote(s, k)
-                    self.play(1)
-                    self.token_generator()
+                    if self.pianoroll.note_selection:
+                        x, y = py.mouse.get_pos()
+                        s = int((x - 200))
+                        k = int((y - 110))
+                        s = int((s - self.pianoroll.controls["timebar"]) / (20 * self.pianoroll.controls["h_zoom"]))
+                        k = k // 10
+                        self.ty = s
+                        self.tx = k
+                        self.pianoroll.copy_selection(self.sx, self.sy, self.tx, self.ty)
+                    elif self.pianoroll.paste_selected:
 
-                    if self.help:
-                        if not self.helper.is_alive():
-                            self.helper.model_name = self.model_name
-                            self.helper.start()
-                            print(self.helper.is_alive())
-                        else:
-                            self.helper.changed = True
+                        x, y = py.mouse.get_pos()
+                        s = int((x - 200))
+                        k = int((y - 110))
+                        s = int((s - self.pianoroll.controls["timebar"]) / (20 * self.pianoroll.controls["h_zoom"]))
+                        k = k // 10
+                        self.pianoroll.paste_notes(kpos=(s, k))
+                    else:
+                        x, y = py.mouse.get_pos()
+                        s = int((x - 200))
+                        k = int((y - 110))
+                        s = int((s - self.pianoroll.controls["timebar"]) / (20 * self.pianoroll.controls["h_zoom"]))
+                        k = int(k / 10)
+                        self.pianoroll.enternote(s, k)
+                        self.play(1)
+                        self.token_generator()
+
+                        if self.help:
+                            if not self.helper.is_alive():
+                                self.helper.model_name = self.model_name
+                                self.helper.start()
+                                print(self.helper.is_alive())
+                            else:
+                                self.helper.changed = True
 
                 if x >= 580 and x <= 596 and y >= 30 and y <= 62:
                     if y >= 30 and y <= 46:
@@ -515,19 +573,11 @@ class Display:
         self.pianoroll.notes[self.pianoroll.selected_track] = array
         self.pianoroll.notes_index[self.pianoroll.selected_track] = []
         ind = 0
-        for _notes in self.pianoroll.notes:
+        for _notes in range(len(self.pianoroll.notes)):
             note_index = []
             # print("Before Error", _notes, _notes.shape)
+            self.pianoroll.indexit(_notes)
 
-            for i in range(_notes.shape[1]):
-                row = _notes[:, i]
-                for v in range(len(row)):
-                    if row[v] != -1:
-                        note_index.append([v, i])
-
-            # print(len(note_index))
-            self.pianoroll.notes_index[ind] = note_index
-            ind += 1
         print("Measure Len", self.measure_limit, array.shape)
         if array.shape[1] < self.measure_limit:
             print("executed measure insuff")
@@ -797,42 +847,6 @@ class Display:
         _, self.input_length = self.model_panel.models_available[self.model_panel.selected_model_index]
         self.rem_tok_for_generation = str(self.input_length - len(encoded))
 
-    # def token_generator(self):
-    #
-    #     # 0 for starting music piece
-    #     # 1 for ending sequence
-    #     # 2 for start of a chord
-    #     # 3 for filling chord that are empty with keys
-    #     # every single note is chord
-    #     nparray = self.pianoroll.notes[self.pianoroll.selected_track]
-    #     temp = [0]
-    #     rest = 0
-    #     for i in range(np.min([32 * 80, nparray.shape[1]])):
-    #         row = nparray[:, i]
-    #         notefound = False
-    #         args = np.nonzero(row + 1)[0]
-    #
-    #         if len(args) > 0:
-    #             if rest > 0:
-    #                 n32rests = int(rest / 32)
-    #                 remrest = rest % 32
-    #                 temp.extend([2, 2 + 1 + 1 + 287 + 32] * n32rests)
-    #                 temp.extend([2, 2 + 1 + 1 + 287 + remrest])
-    #
-    #             rest = 0
-    #             temp.append(2)
-    #             if len(args) >= 5:
-    #
-    #                 for v in args[:5]:
-    #                     temp.append(2 + 1 + 1 + v * 6 + row[v])
-    #             else:
-    #                 for v in args:
-    #                     temp.append(2 + 1 + 1 + v * 6 + row[v])
-    #         else:
-    #             rest += 1
-    #     temp.append(1)
-    #     _, self.input_length = self.model_panel.models_available[self.model_panel.selected_model_index]
-    #     self.rem_tok_for_generation = str(self.input_length - len(temp))
 
     def run(self):
         while not self.quit:

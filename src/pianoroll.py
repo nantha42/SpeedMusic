@@ -1,4 +1,3 @@
-
 import pygame.gfxdraw
 import numpy as np
 from jarvis import *
@@ -25,8 +24,12 @@ class Pianoroll:
         self.selected_track = 0
         self.notes = [np.array(np.ones((48, self.measures * 32))) * -1]
         self.programs = [0]
+        self.note_selection = False
+        self.notes_copied = False
 
         self.notes_index = [[]]
+        self.selected = None
+        self.paste_selected = False
 
         # print(self.notes)
         self.timeFont = Font(10)
@@ -99,27 +102,26 @@ class Pianoroll:
             # tracker.plot()
             # plt.show()
 
-    def play_single_note(self,s):
+    def play_single_note(self, s):
         """
             Plays a single clicked note at a particular point
             :return:
         """
 
-        maxindex = np.argmax(self.notes[self.selected_track][:,s])
+        maxindex = np.argmax(self.notes[self.selected_track][:, s])
 
-        maxdura = self.notes[self.selected_track][:,s][maxindex]+1
+        maxdura = self.notes[self.selected_track][:, s][maxindex] + 1
         # temp_matrix = np.zeros((48,2**dura))
 
-        temp_matrix = np.zeros((int((2**(maxdura))),128))
-        for i  in range(len(self.notes[self.selected_track][:,s])):
-            note = self.notes[self.selected_track][:,s][i]
+        temp_matrix = np.zeros((int((2 ** (maxdura))), 128))
+        for i in range(len(self.notes[self.selected_track][:, s])):
+            note = self.notes[self.selected_track][:, s][i]
             if note > -1:
-                temp_matrix[0:int((2**(note))),83-i] = 90
+                temp_matrix[0:int((2 ** (note))), 83 - i] = 90
         print(temp_matrix.shape)
         tracker = Track(pianoroll=temp_matrix, program=self.programs[self.selected_track])
         multitrack = Multitrack(tracks=[tracker])
         multitrack.write("play_note.mid")
-
 
     def update(self):
         """
@@ -127,7 +129,7 @@ class Pianoroll:
         vertical lines, numberline, notes.
         :return:
         """
-        #print("timebar:", self.controls["timebar"])
+        # print("timebar:", self.controls["timebar"])
         roll_index = 0
         key_color = [0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0]
         key_color.reverse()
@@ -146,7 +148,8 @@ class Pianoroll:
             # below code is for rendering the piano keys on the left
             if key_color[roll_index] == 0:
                 py.draw.rect(self.pianoroll, (255, 255, 255), (0, j + 2, 15, 8))  # white keys
-                py.draw.rect(self.pianoroll, (0, 100, 50), (20, j + 2, self.width - 20, 8))
+                # py.draw.rect(self.pianoroll, (0, 100, 50), (20, j + 2, self.width - 20, 8))
+                py.draw.rect(self.pianoroll, (100, 0, 100), (20, j + 2, self.width - 20, 8))
             else:
                 py.draw.rect(self.pianoroll, (0, 0, 0), (0, j + 2, 15, 8))  #
                 pass
@@ -202,11 +205,11 @@ class Pianoroll:
 
     def enternote(self, s, k):
         if s < self.notes[self.selected_track].shape[1] and self.notes[self.selected_track][k, s] != -1:
-            #for removing note
+            # for removing note
             self.notes[self.selected_track][k, s] = -1
             self.notes_index[self.selected_track].remove([k, s])
         elif s < self.notes[self.selected_track].shape[1]:
-            #Enters note in note_index
+            # Enters note in note_index
             self.notes[self.selected_track][k, s] = self.controls["nthnote"]
             self.notes_index[self.selected_track].append([k, s])
             self.play_single_note(s)
@@ -219,12 +222,11 @@ class Pianoroll:
                 j = (x * 20 * self.controls["h_zoom"] + self.controls["timebar"]) + 20
                 if j + 20 * self.controls["h_zoom"] * (
                         2 ** self.notes[self.selected_track][y][x]) - 2 >= 20 and j < 800:
-                    py.draw.rect(self.pianoroll, (200, 0, 0), (
+                    py.draw.rect(self.pianoroll, (0, 200, 0), (
                         (x * 20 * self.controls["h_zoom"] + self.controls["timebar"]) + 20, y * 10 + 10 + 2,
                         20 * self.controls["h_zoom"] * (2 ** self.notes[self.selected_track][y][x]) - 2, 10 - 2))
 
-
-    def apply_generated(self,generated):
+    def apply_generated(self, generated):
         self.generated = generated
         self.generated_notes_index = []
         for _notes in self.generated:
@@ -238,7 +240,6 @@ class Pianoroll:
 
             # print(len(note_index))
             self.generated_notes_index.append(note_index)
-
 
     def send_event(self, event):
         if event == "measure_increased":
@@ -308,3 +309,38 @@ class Pianoroll:
             self.notes_index[self.selected_track].remove(note)
         self.notes[self.selected_track] = np.roll(self.notes[self.selected_track], 1, axis=0)
         self.notes[self.selected_track][0] = -1
+
+    def assign(self, a, b):
+        if a > b:
+            return [b, a]
+        else:
+            return [a, b]
+
+    def copy_selection(self, a, b, c, d):
+        x1, x2, y1, y2 = self.assign(a, c) + self.assign(b, d)
+        print("Copied", x1, y1, "  ", x2, y2)
+        self.selected = self.notes[self.selected_track][x1:x2, y1:y2]
+        print(self.selected)
+
+    def paste_notes(self, kpos):
+        pos = [kpos[1], kpos[0]]
+        print(pos[0], ":", pos[0] + self.selected.shape[0], " ", pos[1], ":", pos[1] + self.selected.shape[1])
+        s1 = self.notes[self.selected_track][pos[0]:pos[0] + self.selected.shape[0],
+             pos[1]:pos[1] + self.selected.shape[1]].shape
+        s2 = self.selected.shape
+
+        print("Shape comp", s1, "::", s2)
+        if np.all(np.equal(s1, s2)):
+            self.notes[self.selected_track][pos[0]:pos[0] + self.selected.shape[0],
+            pos[1]:pos[1] + self.selected.shape[1]] = self.selected
+            self.indexit(self.selected_track)
+
+    def indexit(self, track_no):
+        self.notes_index[track_no] = []
+        for i in range(self.notes[track_no].shape[1]):
+            row = self.notes[track_no][:, i]
+            for v in range(len(row)):
+                if row[v] != -1:
+                    self.notes_index[track_no].append([v, i])
+
+        # print(len(note_index))
