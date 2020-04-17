@@ -6,7 +6,7 @@ SpeedMusic
 A Pygame application for AI music composition. 
 
 
-![PianoRoll Editor](images/screenshot1.gif)
+![PianoRoll Editor](images/screenshot1.png)
 
 Features
 1. Multi-track composition
