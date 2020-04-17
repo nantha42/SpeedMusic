@@ -334,7 +334,7 @@ class MusicTransformer:
     def __init__(self):
         self.train_dataset = None
         self.test_dataset = None
-        self.num_layers = 4
+        self.num_layers = 2
         self.d_model = 128
         self.dff = 512
         self.input_length = 0
@@ -346,7 +346,10 @@ class MusicTransformer:
         self.dropout_rate = 0.1
         self.BATCH_SIZE = 64
         self.melody = []
+        self.model_name = "transformer"
         self.BUFFER_SIZE = 256
+        self.pe_input = 0
+        self.pe_target = 0
         self.checkpoint_path = 'models/transformer1/'
 
     def build_dataset(self, new_inp, new_out):
@@ -362,7 +365,7 @@ class MusicTransformer:
         self.transformer = Transformer(
             num_layers=2, d_model=512, num_heads=8, dff=2048,
             input_vocab_size=88, target_vocab_size=88,
-            pe_input=40, pe_target=128)
+            pe_input=self.pe_input, pe_target=self.pe_target)
 
         learning_rate = CustomSchedule(self.d_model)
 
@@ -477,6 +480,28 @@ class MusicTransformer:
 
             print('Time taken for 1 epoch: {} secs\n'.format(time.time() - start))
 
+    def t2_generator(self):
+        self.build_transformer()
+
+        sample = np.load("temp.npy")
+        print(sample.shape)
+        print("Input_data_to_model")
+        self.input_data_to_model(sample)
+        self.melody = self.melody[0]
+        print("Model from", self.checkpoint_path)
+        print("Before length", len(self.melody))
+        while len(self.melody) < self.input_length:
+            self.melody.extend(self.melody)
+        print("after length", len(self.melody))
+        # self.melody = self.melody[len(self.melody)-60:]
+        # print(len(self.melody))
+        retuu = list(self.evaluate(self.melody[len(self.melody) - 60:], generate_n_tokens=196)[0] - 1)
+        self.melody.extend(retuu)
+        print("Retu vs melody", len(retuu), len(self.melody))
+        # self.melody.extend(retuu)
+        print("Extending melody")
+        self.decode_track(self.melody)
+
     def new_generator(self):
         self.build_transformer()
 
@@ -485,34 +510,26 @@ class MusicTransformer:
         print("Input_data_to_model")
         self.input_data_to_model(sample)
         self.melody = self.melody[0]
-
+        print("Model from", self.checkpoint_path)
         while len(self.melody) < self.input_length:
             self.melody.extend(self.melody)
 
-        self.melody = self.melody[:40]
-        print(len(self.melody))
-        retuu = list(self.evaluate(self.melody)[0] - 1)
+        # self.melody = self.melody[len(self.melody)-60:]
+        # print(len(self.melody))
+        retuu = list(self.evaluate(self.melody[len(self.melody) - 40:], generate_n_tokens=128)[0] - 1)
         self.decode_track(retuu)
 
-    def evaluate(self, inp_sentence):
-        # start_token = [tokenizer_pt.vocab_size]
-        # end_token = [tokenizer_pt.vocab_size + 1]
-        #
-        # inp sentence is portuguese, hence adding the start and end token
-        # inp_sentence = start_token + tokenizer_pt.encode(inp_sentence) + end_token
+    def evaluate(self, inp_sentence, generate_n_tokens=128):
         inp_sentence = np.array(inp_sentence) + 1
         encoder_input = tf.expand_dims(inp_sentence, 0)
 
-        # as the target is english, the first word to the transformer should be the
-        # english start token.
         decoder_input = [1]
         output = tf.expand_dims(decoder_input, 0)
-        self.MAX_LENGTH = 128
+        self.MAX_LENGTH = generate_n_tokens
         for i in range(self.MAX_LENGTH):
             enc_padding_mask, combined_mask, dec_padding_mask = self.create_masks(
                 encoder_input, output)
 
-            # predictions.shape == (batch_size, seq_len, vocab_size)
             predictions, attention_weights = self.transformer(encoder_input,
                                                               output,
                                                               False,
@@ -520,15 +537,9 @@ class MusicTransformer:
                                                               combined_mask,
                                                               dec_padding_mask)
 
-            # select the last word from the seq_len dimension
             predictions = predictions[:, -1:, :]  # (batch_size, 1, vocab_size)
 
             predicted_id = tf.cast(tf.argmax(predictions, axis=-1), tf.int32)
-
-            # return the result if the predicted_id is equal to the end token
-
-            # concatentate the predicted_id to the output which is given to the decoder
-            # as its input.
             output = tf.concat([output, predicted_id], axis=-1)
 
         return tf.squeeze(output, axis=0), attention_weights

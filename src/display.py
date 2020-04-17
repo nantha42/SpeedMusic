@@ -304,7 +304,7 @@ class Display:
                                                      input_length=self.input_length)
                     if self.loaded_model != self.model_name:
 
-                        if self.model_name != "inference" and self.model_name != "transformer":
+                        if self.model_name != "inference" and self.model_name != "transformer" and self.model_name != "transformer2":
                             if self.loaded_model == "transformer":
                                 self.jarv = DifferenceMelody("models/" + self.model_name + ".h5",
                                                              input_length=self.input_length)
@@ -323,11 +323,29 @@ class Display:
                             print("In transformer")
                             self.jarv = MusicTransformer()
                             self.jarv.input_length = self.input_length
+                            self.jarv.pe_input = 40
+                            self.jarv.pe_target = 128
                             self.jarv.build_transformer()
                             self.loaded_model = "transformer"
                             self.jarv.new_generator()
+
+                        elif self.model_name == "transformer2":
+                            print("In transformer")
+                            self.jarv = MusicTransformer()
+                            self.jarv.model_name = "transformer2"
+                            self.jarv.checkpoint_path = "models/transformer2/"
+                            self.jarv.input_length = self.input_length
+                            self.jarv.pe_input = 60
+                            self.jarv.pe_target = 196
+                            self.jarv.build_transformer()
+                            self.loaded_model = "transformer2"
+                            self.jarv.t2_generator()
+
                         else:
                             print("inference")
+                            self.jarv = DifferenceMelody("models/" + self.model_name + ".h5",
+                                                         input_length=self.input_length)
+
                             self.jarv.model_name = "models/" + self.model_name + ".h5"
                             self.jarv.input_length = self.input_length
                             self.loaded_model = self.model_name
@@ -335,13 +353,19 @@ class Display:
 
 
                     else:
+                        print(self.jarv.model_name)
                         if self.jarv.model_name == "transformer":
                             self.loaded_model = "transformer"
                             self.jarv.new_generator()
 
-                        elif self.jarv.model_name == "inference":
+                        elif self.jarv.model_name == "transformer2":
+                            self.loaded_model = "transformer2"
+                            self.jarv.t2_generator()
+
+                        elif self.jarv.model_name == "models/inference.h5":
                             self.loaded_model = self.model_name
                             self.jarv.inf_generator()
+
                         else:
                             self.loaded_model = self.model_name
                             self.jarv.new_generator()
@@ -371,21 +395,14 @@ class Display:
                     self.loaded_model.input_data_to_model(self.pianoroll.notes[self.pianoroll.selected_track])
                     self.loaded_model.random_noise()
 
-                if event.key == py.K_m:
-                    self.controls["show_map"] = not self.controls["show_map"]
+                # if event.key == py.K_m:
+                #     self.controls["show_map"] = not self.controls["show_map"]
 
-                if event.key == py.K_t:
-                    parsed_track = self.parse_first_track(self.file)
-                    print("ParsedTrack", parsed_track)
-                    self.pianoroll.load_file(parsed_track, self.measure_limit * self.measure_length)
+                # if event.key == py.K_t:
+                #     parsed_track = self.parse_first_track(self.file)
+                #     print("ParsedTrack", parsed_track)
+                #     self.pianoroll.load_file(parsed_track, self.measure_limit * self.measure_length)
 
-                if event.key == py.K_r:
-                    for i in range(self.pianoroll.notes.shape[1]):
-                        ter = self.pianoroll.notes[:, i]
-                        for j in range(len(ter)):
-                            if ter[j] != -1:
-                                ter[j + 1:] = -1
-                    self.events["update_pianoroll"] = True
 
                 if event.key == py.K_q:
                     np.save('train_data.npy', self.pianoroll.notes)
@@ -718,42 +735,94 @@ class Display:
             self.helper.finished = False
             self.pianoroll.apply_generated(self.helper.generated)
 
-    def token_generator(self):
+    def encode_track(self, nparray):
+        """Receives a array of shape (48,)"""
 
-        # 0 for starting music piece
-        # 1 for ending sequence
-        # 2 for start of a chord
-        # 3 for filling chord that are empty with keys
-        # every single note is chord
-        nparray = self.pianoroll.notes[self.pianoroll.selected_track]
-        temp = [0]
+        def get_top_index(quant_notes):
+            for i in range(len(quantum_notes)):
+                if quantum_notes[i] >= 0:
+                    return i
+            return -1
+
+        starting = True
+        startnote = None
+        encoded = [0]
         rest = 0
-        for i in range(np.min([32 * 80, nparray.shape[1]])):
-            row = nparray[:, i]
-            notefound = False
-            args = np.nonzero(row + 1)[0]
+        for quantum in range(nparray.shape[1]):
+            quantum_notes = nparray[:, quantum]
+            if len(np.nonzero(quantum_notes + 1)[0]) > 0:
+                if starting:
+                    i = get_top_index(quantum_notes)
+                    if i > -1:
+                        starting = False
+                        print(starting, (not starting))
+                        startnote = i
+                        time_quantum = quantum_notes[i]
+                        curnote = 24
+                        encoded.extend([curnote + 7,
+                                        time_quantum + 1])
 
-            if len(args) > 0:
-                if rest > 0:
-                    n32rests = int(rest / 32)
-                    remrest = rest % 32
-                    temp.extend([2, 2 + 1 + 1 + 287 + 32] * n32rests)
-                    temp.extend([2, 2 + 1 + 1 + 287 + remrest])
-
-                rest = 0
-                temp.append(2)
-                if len(args) >= 5:
-
-                    for v in args[:5]:
-                        temp.append(2 + 1 + 1 + v * 6 + row[v])
-                else:
-                    for v in args:
-                        temp.append(2 + 1 + 1 + v * 6 + row[v])
-            else:
+                elif not starting:
+                    i = get_top_index(quantum_notes)
+                    if i > -1:
+                        if rest > 0:
+                            if rest > 32:
+                                rest = 32
+                            encoded.append(54 + rest)
+                            rest = 0
+                        time_quantum = quantum_notes[i]
+                        curnote = 24 + startnote - i
+                        if 0 <= curnote <= 47:
+                            encoded.extend([curnote + 7,
+                                            time_quantum + 1])
+            elif not starting:
                 rest += 1
-        temp.append(1)
+
+        return encoded
+
+    def token_generator(self):
+        nparray = self.pianoroll.notes[self.pianoroll.selected_track]
+
+        encoded = self.encode_track(nparray)
         _, self.input_length = self.model_panel.models_available[self.model_panel.selected_model_index]
-        self.rem_tok_for_generation = str(self.input_length - len(temp))
+        self.rem_tok_for_generation = str(self.input_length - len(encoded))
+
+    # def token_generator(self):
+    #
+    #     # 0 for starting music piece
+    #     # 1 for ending sequence
+    #     # 2 for start of a chord
+    #     # 3 for filling chord that are empty with keys
+    #     # every single note is chord
+    #     nparray = self.pianoroll.notes[self.pianoroll.selected_track]
+    #     temp = [0]
+    #     rest = 0
+    #     for i in range(np.min([32 * 80, nparray.shape[1]])):
+    #         row = nparray[:, i]
+    #         notefound = False
+    #         args = np.nonzero(row + 1)[0]
+    #
+    #         if len(args) > 0:
+    #             if rest > 0:
+    #                 n32rests = int(rest / 32)
+    #                 remrest = rest % 32
+    #                 temp.extend([2, 2 + 1 + 1 + 287 + 32] * n32rests)
+    #                 temp.extend([2, 2 + 1 + 1 + 287 + remrest])
+    #
+    #             rest = 0
+    #             temp.append(2)
+    #             if len(args) >= 5:
+    #
+    #                 for v in args[:5]:
+    #                     temp.append(2 + 1 + 1 + v * 6 + row[v])
+    #             else:
+    #                 for v in args:
+    #                     temp.append(2 + 1 + 1 + v * 6 + row[v])
+    #         else:
+    #             rest += 1
+    #     temp.append(1)
+    #     _, self.input_length = self.model_panel.models_available[self.model_panel.selected_model_index]
+    #     self.rem_tok_for_generation = str(self.input_length - len(temp))
 
     def run(self):
         while not self.quit:
