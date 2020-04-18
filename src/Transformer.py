@@ -31,6 +31,7 @@ def positional_encoding(position, d_model):
                             d_model)
 
     # apply sin to even indices in the array; 2i
+
     angle_rads[:, 0::2] = np.sin(angle_rads[:, 0::2])
 
     # apply cos to odd indices in the array; 2i+1
@@ -42,7 +43,7 @@ def positional_encoding(position, d_model):
 
 
 def scaled_dot_product_attention(q, k, v, mask):
-    """Calculate the attention weights.
+    """Calculate thet attention weights.
     q, k, v must have matching leading dimensions.
     k, v must have matching penultimate dimension, i.e.: seq_len_k = seq_len_v.
     The mask has different shapes depending on its type(padding or look ahead)

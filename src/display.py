@@ -29,7 +29,8 @@ class Display:
         self.j = 10
 
         self.model_name = "models/inference.h5"
-        self.controls = {"right_click": False, "play": False, "move_piano_roll_left": False, "update_ipanel": True,
+        self.controls = {"right_click": False, "left_click": False, "play": False, "move_piano_roll_left": False,
+                         "update_ipanel": True,
                          "move_piano_roll_right": False, "playing": False, "show_map": False, "microplay": False}
         self.events = {"update_pianoroll": True}
         self.event_handled = True
@@ -79,6 +80,8 @@ class Display:
         self.symbol_measure = py.image.load(self.image_loc + "measure.png")
         self.sx = -1
         self.sy = -1
+        self.cx = -1
+        self.cy = -1
         self.tx = -1
         self.ty = -1
 
@@ -210,25 +213,59 @@ class Display:
                         self.pianoroll.deletenote(s, k)
                         self.events["update_pianoroll"] = True
 
+                if self.controls["left_click"] and self.pianoroll.note_selection:
+                    x, y = py.mouse.get_pos()
+                    if x >= 200 and x <= 980 and y >= 110 and y <= 590:
+                        stx = 0;
+                        sty = 0
+                        if x > self.cx:
+                            stx = self.cx
+                        else:
+                            stx = x
+                        if y > self.cy:
+                            sty = self.cy
+                        else:
+                            sty = y
+                        width = np.abs(x - self.cx)
+                        height = np.abs(y - self.cy)
+                        self.events["update_pianoroll"] = True
+                        self.draw()
+                        py.gfxdraw.box(self.win, py.Rect(stx, sty, width, height), (0, 150, 30, 30))
+                        py.display.update()
+
             if event.type == py.MOUSEBUTTONDOWN:
                 if event.button == 3:
                     self.controls["right_click"] = True
 
+                if event.button == 1:
+                    # self.controls["left"]
+                    self.controls["left_click"] = True
+                    print("Mouse Left Clicked")
+
                 if self.pianoroll.note_selection:
                     self.pianoroll.paste_selected = False
                     x, y = py.mouse.get_pos()
-                    s = int((x - 200))
-                    k = int((y - 110))
-                    s = int((s - self.pianoroll.controls["timebar"]) / (20 * self.pianoroll.controls["h_zoom"]))
-                    k = int(k / 10)
-                    self.sy = s
-                    self.sx = k
+                    if x >= 200 and x <= 980 and y >= 110 and y <= 590:
+                        s = int((x - 200))
+                        k = int((y - 110))
+                        s = int((s - self.pianoroll.controls["timebar"]) / (20 * self.pianoroll.controls["h_zoom"]))
+                        k = int(k / 10)
+                        self.sy = s
+                        self.sx = k
+                        self.cx = x
+                        self.cy = y
 
             if event.type == py.MOUSEBUTTONUP:
                 self.event_handled = True
                 self.events["update_pianoroll"] = True
                 x, y = py.mouse.get_pos()
+
                 print(x, y)
+
+                if event.button == 1:
+                    self.cx, self.cy = -1, -1
+                    self.controls["left_click"] = False
+
 
                 if 325 < x < 325 + 32 and 30 < y < 30 + 32:
                     self.pianoroll.paste_selected = not self.pianoroll.paste_selected
@@ -278,6 +315,8 @@ class Display:
                 # On clicking the pianoroll for entering notes
                 if 200 <= x <= 980 and 110 <= y <= 590 and self.controls["right_click"] == False:
                     if self.pianoroll.note_selection:
+                        self.pianoroll.note_selection = False
+                        self.button_selection = py.image.load(self.image_loc + "selection_false.png")
                         x, y = py.mouse.get_pos()
                         s = int((x - 200))
                         k = int((y - 110))
@@ -447,21 +486,21 @@ class Display:
                     jarv.input_length = self.input_length
                     jarv.use_model()
 
-                if event.key == py.K_e:
-                    """Uses only the notes that is present in the 
-                    pianoroll.notes_index"""
-                    if self.loaded_model is None:
-                        self.loaded_model = Melody(self.model_name)
-
-                    use_notes = list()
-
-                    for note_index in self.pianoroll.notes_index[self.pianoroll.selected_track]:
-                        s, t = note_index
-                        # print(note_index, note_index[0] * 6 + self.pianoroll.notes[self.pianoroll.selected_track][s][t])
-                        use_notes.append(note_index[0] * 6 + self.pianoroll.notes[self.pianoroll.selected_track][s][t])
-                    self.loaded_model.input_length = self.input_length
-                    self.loaded_model.input_data_to_model(self.pianoroll.notes[self.pianoroll.selected_track])
-                    self.loaded_model.random_noise()
+                # if event.key == py.K_e:
+                #     """Uses only the notes that is present in the
+                #     pianoroll.notes_index"""
+                #     if self.loaded_model is None:
+                #         self.loaded_model = Melody(self.model_name)
+                #
+                #     use_notes = list()
+                #
+                #     for note_index in self.pianoroll.notes_index[self.pianoroll.selected_track]:
+                #         s, t = note_index
+                #         # print(note_index, note_index[0] * 6 + self.pianoroll.notes[self.pianoroll.selected_track][s][t])
+                #         use_notes.append(note_index[0] * 6 + self.pianoroll.notes[self.pianoroll.selected_track][s][t])
+                #     self.loaded_model.input_length = self.input_length
+                #     self.loaded_model.input_data_to_model(self.pianoroll.notes[self.pianoroll.selected_track])
+                #     self.loaded_model.random_noise()
 
                 # if event.key == py.K_m:
                 #     self.controls["show_map"] = not self.controls["show_map"]
@@ -471,9 +510,8 @@ class Display:
                 #     print("ParsedTrack", parsed_track)
                 #     self.pianoroll.load_file(parsed_track, self.measure_limit * self.measure_length)
 
-
-                if event.key == py.K_q:
-                    np.save('train_data.npy', self.pianoroll.notes)
+                # if event.key == py.K_q:
+                #     np.save('train_data.npy', self.pianoroll.notes)
 
                 if event.key == py.K_UP:
                     if self.pianoroll.controls["h_zoom"] >= 1 and not self.controls["playing"]:
