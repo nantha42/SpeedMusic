@@ -44,7 +44,7 @@ class Display:
         self.loaded_model = None
         self.openfile = False
         self.input_length = inp_length
-
+        self.generate_tokens = 20
         self.helper = Helper(self.pianoroll.notes, self.model_name, self.input_length, 512)
 
         if file == "":
@@ -167,8 +167,8 @@ class Display:
         font = Font(14)
         # print()
 
-        surf, rec = font.text_object(self.rem_tok_for_generation)
-        self.win.blit(surf, (670, 30))
+        surf, rec = font.text_object("Rem: " + self.rem_tok_for_generation + " Gen: " + str(self.generate_tokens))
+        self.win.blit(surf, (630, 30))
         # self.image.blit(surf, (5, 5))
 
         if self.controls["move_piano_roll_left"] or self.controls["move_piano_roll_right"]:
@@ -383,6 +383,14 @@ class Display:
                 if event.key == py.K_p:
                     self.pianoroll.play_notes()
 
+                if event.key == py.K_u:
+                    if self.generate_tokens < 196:
+                        self.generate_tokens += 1
+
+                if event.key == py.K_i:
+                    if self.generate_tokens > 10:
+                        self.generate_tokens -= 1
+
                 if event.key == py.K_j:
                     print(self.pianoroll.selected_track)
                     print(self.pianoroll.notes_index)
@@ -446,7 +454,7 @@ class Display:
                             self.jarv.pe_target = 196
                             self.jarv.build_transformer()
                             self.loaded_model = "transformer2"
-                            self.jarv.t2_generator()
+                            self.jarv.t2_generator(self.generate_tokens)
 
                         else:
                             print("inference")
@@ -467,7 +475,7 @@ class Display:
 
                         elif self.jarv.model_name == "transformer2":
                             self.loaded_model = "transformer2"
-                            self.jarv.t2_generator()
+                            self.jarv.t2_generator(self.generate_tokens)
 
                         elif self.jarv.model_name == "models/inference.h5":
                             self.loaded_model = self.model_name
@@ -905,7 +913,6 @@ def open_mid_randomly():
 
 if __name__ == '__main__':
 
-    # file = "data/"+open_mid_randomly()
     file = "data/" + "My_Melancholy_Blues.mid"
     if len(sys.argv) == 2:
         file = sys.argv[1]

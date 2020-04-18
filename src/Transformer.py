@@ -481,26 +481,17 @@ class MusicTransformer:
 
             print('Time taken for 1 epoch: {} secs\n'.format(time.time() - start))
 
-    def t2_generator(self):
+    def t2_generator(self, generate_tokens):
         self.build_transformer()
 
         sample = np.load("temp.npy")
-        print(sample.shape)
-        print("Input_data_to_model")
         self.input_data_to_model(sample)
         self.melody = self.melody[0]
-        print("Model from", self.checkpoint_path)
-        print("Before length", len(self.melody))
         while len(self.melody) < self.input_length:
             self.melody.extend(self.melody)
-        print("after length", len(self.melody))
-        # self.melody = self.melody[len(self.melody)-60:]
-        # print(len(self.melody))
-        retuu = list(self.evaluate(self.melody[len(self.melody) - 60:], generate_n_tokens=196)[0] - 1)
+
+        retuu = list(self.evaluate(self.melody[len(self.melody) - 60:], generate_n_tokens=generate_tokens)[0] - 1)
         self.melody.extend(retuu)
-        print("Retu vs melody", len(retuu), len(self.melody))
-        # self.melody.extend(retuu)
-        print("Extending melody")
         self.decode_track(self.melody)
 
     def new_generator(self):
